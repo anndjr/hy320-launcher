@@ -252,20 +252,26 @@ public class ControlService extends AccessibilityService {
      */
     String searchInApp(String query) {
         if (query.trim().isEmpty()) return "Digite o que quer procurar";
+        // SmartTube e YouTube têm busca própria que já funciona pelo link de pesquisa.
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        String pkg = root == null ? "" : String.valueOf(root.getPackageName());
+        if (pkg.contains("smarttube") || pkg.startsWith("com.google.android.youtube")) {
+            return Commands.searchYouTube(this, query);
+        }
         AccessibilityNodeInfo field = findEditable();
+        AccessibilityNodeInfo button = null;
+        // A busca costuma ficar no topo e some quando a lista desce: sobe até ela aparecer.
+        for (int i = 0; field == null && i < 5; i++) {
+            button = findSearchButton(getRootInActiveWindow());
+            if (button != null || i == 4 || !KeyInjector.press(KeyInjector.code("up"))) break;
+            if (!pause(400)) return "Interrompido";
+            field = findEditable();
+        }
         if (field == null) {
-            AccessibilityNodeInfo button = findSearchButton(getRootInActiveWindow());
             if (button == null) return "Não achei a busca desse app. Abra a tela de busca dele e tente de novo";
-            while (button != null && !button.isClickable()) button = button.getParent();
-            if (button == null || !button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                return "Não consegui abrir a busca desse app";
-            }
+            if (!button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return "Não consegui abrir a busca desse app";
             for (int i = 0; i < 10 && field == null; i++) {
-                try {
-                    Thread.sleep(300);
-                } catch (InterruptedException e) {
-                    return "Interrompido";
-                }
+                if (!pause(300)) return "Interrompido";
                 field = findEditable();
             }
             if (field == null) return "Abri a busca, mas o app não tem campo de texto que aceite digitação";
@@ -286,12 +292,32 @@ public class ControlService extends AccessibilityService {
         return firstMatch(getRootInActiveWindow(), n -> n.isEditable() && n.isVisibleToUser());
     }
 
+    private static boolean pause(long ms) {
+        try {
+            Thread.sleep(ms);
+            return true;
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Botão clicável que fala em busca (nome, texto ou id); se não tiver, um ícone com esse
+     * nome dentro de um botão. Ignora telas e listas inteiras que só têm "search" no id.
+     */
     private static AccessibilityNodeInfo findSearchButton(AccessibilityNodeInfo root) {
-        return firstMatch(root, n -> {
-            if (!n.isVisibleToUser()) return false;
-            String text = (n.getContentDescription() + " " + n.getText() + " " + n.getViewIdResourceName()).toLowerCase();
-            return text.contains("search") || text.contains("pesquis") || text.contains("busca") || text.contains("procurar");
-        });
+        AccessibilityNodeInfo button = firstMatch(root, n -> n.isVisibleToUser() && n.isClickable()
+                && isSearchWord(n.getContentDescription() + " " + n.getText() + " " + n.getViewIdResourceName()));
+        if (button != null) return button;
+        AccessibilityNodeInfo icon = firstMatch(root, n -> n.isVisibleToUser()
+                && isSearchWord(n.getContentDescription() + " " + n.getText()));
+        while (icon != null && !icon.isClickable()) icon = icon.getParent();
+        return icon;
+    }
+
+    private static boolean isSearchWord(String text) {
+        text = text.toLowerCase();
+        return text.contains("search") || text.contains("pesquis") || text.contains("busca") || text.contains("procurar");
     }
 
     private static AccessibilityNodeInfo firstMatch(AccessibilityNodeInfo node,
