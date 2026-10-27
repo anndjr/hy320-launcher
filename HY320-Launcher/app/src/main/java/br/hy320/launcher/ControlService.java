@@ -136,6 +136,7 @@ public class ControlService extends AccessibilityService {
         app.getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED), false, observer);
         ensureEnabled(app);
+        AdbClient.warmUp(app);
     }
 
     static String describeState(Context context) {
@@ -153,6 +154,8 @@ public class ControlService extends AccessibilityService {
             }
         }
         if (lastProblem != null) text.append("\nProblema: ").append(lastProblem);
+        text.append("\nSetas pelo ADB: ").append(AdbClient.ready ? "funcionando"
+                : AdbClient.lastProblem != null ? "não (" + AdbClient.lastProblem + ")" : "ainda não testado");
         if (instance == null) {
             // Detalhes crus pra descobrir onde o firmware trava.
             String raw = Settings.Secure.getString(context.getContentResolver(),
