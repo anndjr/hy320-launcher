@@ -49,9 +49,9 @@ final class ApkServer extends Thread {
             [hidden]{display:none!important}
             html{height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
             body{height:100%;overflow:hidden;margin:0;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,Roboto,sans-serif;overscroll-behavior:none}
-            header{flex:none;display:flex;align-items:center;gap:10px;padding:16px 20px 10px;background:var(--bg)}
+            header{flex:none;display:flex;align-items:center;padding:16px 20px 10px;background:var(--bg)}
             header h1{font-size:19px;margin:0;flex:1;font-weight:700}
-            #dot{width:10px;height:10px;border-radius:50%;background:#555}
+            #dot{width:10px;height:10px;border-radius:50%;background:#555;margin-right:10px}
             #dot.on{background:var(--good);box-shadow:0 0 10px var(--good)}#dot.off{background:var(--bad)}
             #stxt{font-size:13px;color:var(--muted)}
             main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px calc(100px + env(safe-area-inset-bottom))}
@@ -62,40 +62,40 @@ final class ApkServer extends Thread {
             button{font:inherit;border:0;border-radius:14px;background:var(--card2);color:#fff;font-size:16px;font-weight:600;padding:14px 10px;touch-action:manipulation;transition:transform .08s,background .15s}
             button:active,button.press{transform:scale(.95);background:var(--accent)}
             button.main{background:var(--accent)}
-            .row{display:flex;gap:8px;margin-top:8px}.row>*{flex:1}
+            .row{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;margin-top:8px}
             .seg{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:6px}
             .seg button{flex:1;background:none;padding:10px;font-size:14px;color:var(--muted)}
             .seg button.on{background:var(--card2);color:#fff}
             .seg button:active{transform:none}
-            .dpad{position:relative;width:min(78vw,300px);aspect-ratio:1;margin:14px auto 20px;border-radius:50%;background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
+            .dpad{position:relative;width:78vw;height:78vw;max-width:300px;max-height:300px;margin:14px auto 20px;border-radius:50%;background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
             .dpad button{position:absolute;width:33%;height:33%;padding:0;border-radius:50%;background:none;color:var(--muted);font-size:24px}
             .dpad button:active,.dpad button.press{transform:none;background:#ffffff18;color:#fff}
             .dpad .up{top:2%;left:33.5%}.dpad .down{bottom:2%;left:33.5%}.dpad .left{left:2%;top:33.5%}.dpad .right{right:2%;top:33.5%}
             .dpad .ok{top:30%;left:30%;width:40%;height:40%;background:var(--card2);color:#fff;font-size:19px;box-shadow:0 6px 20px #0008}
             .dpad .ok:active,.dpad .ok.press{background:var(--accent)}
-            #pad{height:min(78vw,300px);margin:14px 0 20px;border-radius:24px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:14px;padding:20px;touch-action:none}
+            #pad{height:78vw;max-height:300px;margin:14px 0 20px;border-radius:24px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:14px;padding:20px;touch-action:none}
             #pad.touch{background:var(--card2)}
             .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
             .keys button{padding:16px 4px;font-size:15px}
             textarea,input[type=url]{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:#fff;font:inherit;font-size:17px;-webkit-user-select:text;user-select:text}
             textarea{height:88px;resize:none}
-            label.sw{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--muted);font-size:14px}
-            label.sw input{width:20px;height:20px;accent-color:var(--accent)}
-            .app{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+            label.sw{display:flex;align-items:center;margin-top:12px;color:var(--muted);font-size:14px}
+            label.sw input{width:20px;height:20px;margin:0 10px 0 0;accent-color:var(--accent)}
+            .app{display:grid;grid-template-columns:1fr 46px;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
             .app:last-child{border-bottom:0}
-            .app span{flex:1;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-            .app button{flex:0 0 46px;height:46px;padding:0;border-radius:50%;background:#3a2338;color:var(--bad);font-size:18px}
+            .app span{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .app button{width:46px;height:46px;padding:0;border-radius:50%;background:#3a2338;color:var(--bad);font-size:18px}
             .none{color:var(--muted);padding:6px 0}
             .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
             input[type=file]{display:none}
             label.pick{display:block;border:2px dashed #2f3a5c;border-radius:14px;padding:16px 10px;text-align:center;color:var(--muted);word-break:break-all}
             .bar{height:6px;background:var(--bg);border-radius:3px;margin-top:10px;overflow:hidden}.fill{height:100%;width:0;background:var(--accent)}
             pre{white-space:pre-wrap;color:var(--muted);font:13px/1.5 system-ui;margin:0}
-            nav{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;gap:4px;background:#0f1528f2;backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
-            nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;color:var(--muted);font-size:12px;padding:8px 0;border-radius:12px}
+            nav{position:fixed;left:0;right:0;bottom:0;z-index:3;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#0f1528f2;backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+            nav button{display:flex;flex-direction:column;align-items:center;background:none;color:var(--muted);font-size:12px;padding:8px 0;border-radius:12px}
             nav button:active{transform:none;background:var(--card)}
             nav button.on{color:#fff;background:var(--card)}
-            nav svg{width:24px;height:24px;fill:currentColor}
+            nav svg{width:24px;height:24px;fill:currentColor;margin-bottom:3px}
             #toast{position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:448px;margin:0 auto;padding:13px;border-radius:14px;background:var(--accent);text-align:center;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;z-index:4}
             #toast.show{opacity:1;transform:none}#toast.bad{background:#b3364a}
             </style></head><body>
