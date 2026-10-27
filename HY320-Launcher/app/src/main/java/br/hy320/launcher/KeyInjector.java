@@ -17,6 +17,8 @@ import java.nio.file.Files;
  */
 final class KeyInjector {
 
+    static final int KEY_POWER = 116;
+
     private static final String[] DEVICE_NAMES = {"sunxi-keyboard", "sunxi-ir-uinput"};
     private static File device;
     private static boolean searched;

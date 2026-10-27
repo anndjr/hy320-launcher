@@ -15,6 +15,7 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import java.io.IOException;
@@ -267,19 +268,27 @@ public class ControlService extends AccessibilityService {
         MainActivity.sleepRequested = true;
         performGlobalAction(GLOBAL_ACTION_HOME);
         // Abre o menu de energia e escolhe "Desligar"; se não achar, fica só a tela escura.
+        // O firmware ignora GLOBAL_ACTION_POWER_DIALOG, mas a tecla Power abre o menu.
         handler.postDelayed(() -> {
-            performGlobalAction(GLOBAL_ACTION_POWER_DIALOG);
+            if (!KeyInjector.press(KeyInjector.KEY_POWER)) performGlobalAction(GLOBAL_ACTION_POWER_DIALOG);
             handler.postDelayed(this::clickPowerOff, 2000);
         }, 1500);
     }
 
     private void clickPowerOff() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) return;
-        for (String label : new String[]{"Desligar", "Power off", "Shut down"}) {
-            for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(label)) {
-                while (node != null && !node.isClickable()) node = node.getParent();
-                if (node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return;
+        java.util.List<AccessibilityNodeInfo> roots = new java.util.ArrayList<>();
+        for (AccessibilityWindowInfo window : getWindows()) {
+            AccessibilityNodeInfo root = window.getRoot();
+            if (root != null) roots.add(root);
+        }
+        AccessibilityNodeInfo active = getRootInActiveWindow();
+        if (active != null) roots.add(active);
+        for (AccessibilityNodeInfo root : roots) {
+            for (String label : new String[]{"Desligar", "Power off", "Shut down"}) {
+                for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(label)) {
+                    while (node != null && !node.isClickable()) node = node.getParent();
+                    if (node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return;
+                }
             }
         }
     }
