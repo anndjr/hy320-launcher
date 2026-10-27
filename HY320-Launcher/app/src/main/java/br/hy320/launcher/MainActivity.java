@@ -128,6 +128,14 @@ public class MainActivity extends Activity {
         }
     };
 
+    // App instalado ou removido com a tela inicial aberta: atualiza a lista na hora.
+    private final android.content.BroadcastReceiver packagesChanged = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            loadApps();
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -146,6 +154,12 @@ public class MainActivity extends Activity {
         wallpaper = findViewById(R.id.wallpaper);
         wallpaperDim = findViewById(R.id.wallpaper_dim);
         useStocksScreensaver();
+        android.content.IntentFilter filter = new android.content.IntentFilter();
+        filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        filter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        filter.addDataScheme("package");
+        registerReceiver(packagesChanged, filter);
 
         String saved = prefs.getString(KEY_FAVORITES, "");
         for (String pkg : saved.split(",")) {
@@ -189,6 +203,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        unregisterReceiver(packagesChanged);
         executor.shutdownNow();
     }
 
