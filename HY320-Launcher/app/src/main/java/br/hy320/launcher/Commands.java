@@ -46,10 +46,21 @@ final class Commands {
                 ControlService service = ControlService.instance;
                 boolean arrow = code != KeyEvent.KEYCODE_BACK && code != KeyEvent.KEYCODE_HOME;
                 // Setas e OK: tecla de verdade pelo ADB (funciona no YouTube); Voltar/Início: acessibilidade, que é mais rápida.
+                if (arrow && code != 0 && KeyInjector.press(linuxCode(code))) return null;
                 if (arrow && code != 0 && AdbClient.key(context, code)) return null;
                 if (service != null && service.key(key)) return null;
                 if (!arrow && AdbClient.key(context, code)) return null;
                 return service == null ? needControl(context) : "Não deu pra fazer isso nessa tela";
+        }
+    }
+
+    private static int linuxCode(int androidCode) {
+        switch (androidCode) {
+            case KeyEvent.KEYCODE_DPAD_UP: return KeyInjector.KEY_UP;
+            case KeyEvent.KEYCODE_DPAD_DOWN: return KeyInjector.KEY_DOWN;
+            case KeyEvent.KEYCODE_DPAD_LEFT: return KeyInjector.KEY_LEFT;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return KeyInjector.KEY_RIGHT;
+            default: return KeyInjector.KEY_OK;
         }
     }
 
