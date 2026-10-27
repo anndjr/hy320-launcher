@@ -61,6 +61,25 @@
             android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.Sleep" />
 
+        <activity
+            android:name=".StocksActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Sleep" />
+
+        <!-- Descanso de tela com o painel da bolsa -->
+        <service
+            android:name=".StocksDream"
+            android:exported="true"
+            android:label="Bolsa de valores"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".InstallResultReceiver"
             android:exported="false" />
