@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -96,7 +97,8 @@ public class ControlService extends AccessibilityService {
      * Só funciona depois de: adb shell pm grant br.hy320.launcher android.permission.WRITE_SECURE_SETTINGS
      */
     static void ensureEnabled(Context context) {
-        if (instance != null || isEnabledInSettings(context)) return;
+        if (isEnabledInSettings(context)
+                && Settings.Secure.getInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1) return;
         if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS")
                 != PackageManager.PERMISSION_GRANTED) return;
         String me = new ComponentName(context, ControlService.class).flattenToString();
@@ -110,6 +112,30 @@ public class ControlService extends AccessibilityService {
         } catch (SecurityException e) {
             lastProblem = "sem permissão pra religar: " + e.getMessage();
         }
+    }
+
+    private static boolean watching;
+
+    /**
+     * O firmware apaga a lista sempre que outro app abre por cima do launcher;
+     * observa a configuração e religa na hora, com o launcher em segundo plano.
+     */
+    static void watch(Context context) {
+        if (watching) return;
+        watching = true;
+        Context app = context.getApplicationContext();
+        Handler main = new Handler(Looper.getMainLooper());
+        ContentObserver observer = new ContentObserver(main) {
+            @Override
+            public void onChange(boolean selfChange) {
+                ensureEnabled(app);
+            }
+        };
+        app.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, observer);
+        app.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED), false, observer);
+        ensureEnabled(app);
     }
 
     static String describeState(Context context) {

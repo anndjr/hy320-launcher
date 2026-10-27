@@ -567,6 +567,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateStatus() {
+        ControlService.watch(this);
         ControlService.ensureEnabled(this);
         int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         greeting.setText(hour < 5 ? "Boa noite" : hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite");
