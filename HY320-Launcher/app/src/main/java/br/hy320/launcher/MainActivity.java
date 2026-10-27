@@ -171,6 +171,8 @@ public class MainActivity extends Activity {
 
         addShortcut(R.drawable.ic_phone, "Celular",
                 () -> startSafely(new Intent(this, ReceiveActivity.class)));
+        addShortcut(R.drawable.ic_apps, "Apps abertos",
+                () -> startSafely(new Intent(this, OpenAppsActivity.class)));
         addShortcut(R.drawable.ic_chart, "Bolsa",
                 () -> startSafely(new Intent(this, StocksActivity.class)));
         addShortcut(R.drawable.ic_timer, "Timer de dormir", this::showSleepTimer);

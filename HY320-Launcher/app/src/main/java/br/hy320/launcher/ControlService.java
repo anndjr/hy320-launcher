@@ -199,6 +199,12 @@ public class ControlService extends AccessibilityService {
         }
     }
 
+    /** Pacote do app que está na tela agora, ou "" se não souber. */
+    String foregroundPackage() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        return root == null || root.getPackageName() == null ? "" : root.getPackageName().toString();
+    }
+
     private boolean move(int direction, int globalAction) {
         // Android 13+ tem setas nativas; antes disso movemos o foco pela árvore de views.
         if (Build.VERSION.SDK_INT >= 33) return performGlobalAction(globalAction);

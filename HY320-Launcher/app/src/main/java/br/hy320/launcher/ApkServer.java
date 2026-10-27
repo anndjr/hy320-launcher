@@ -58,6 +58,10 @@ final class ApkServer extends Thread {
             label.pick{display:block;border:2px dashed #3a4566;border-radius:12px;padding:18px 10px;text-align:center;color:#a9b1c7;word-break:break-all}
             .bar{height:6px;background:#0c1222;border-radius:3px;margin-top:10px;overflow:hidden}
             .fill{height:100%;width:0;background:#6ea8ff}
+            .app{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #ffffff12}
+            .app span{flex:1;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .app button{width:52px;height:44px;padding:0;font-size:20px;background:#3a2338;color:#ff8a9a}
+            #apps .none{color:#a9b1c7;padding:4px 0}
             #toast{position:fixed;left:16px;right:16px;bottom:16px;padding:14px;border-radius:12px;background:#2b6cff;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
             #toast.show{opacity:1}#toast.bad{background:#b3364a}
             </style></head><body>
@@ -72,6 +76,11 @@ final class ApkServer extends Thread {
             </div>
             <div class="row"><button data-k="back">Voltar</button><button data-k="home">In&iacute;cio</button></div>
             <div class="row"><button data-k="voldown">Vol &minus;</button><button data-k="mute">Mudo</button><button data-k="volup">Vol +</button></div>
+            </div>
+
+            <div class="card"><h2>Apps abertos</h2>
+            <div id="apps"><div class="none">Carregando…</div></div>
+            <div class="row"><button id="closeall">Fechar todos</button><button id="appsreload">Atualizar</button></div>
             </div>
 
             <div class="card"><h2>Digitar no campo selecionado</h2>
@@ -118,6 +127,16 @@ final class ApkServer extends Thread {
             $('enter').onclick=()=>post('/text?enter=1',$('txt').value,'Enviado');
             $('clear').onclick=()=>{$('txt').value='';post('/text','');};
             $('yt').onclick=()=>post('/youtube',$('txt').value,'Pesquisando no YouTube');
+            function loadApps(){fetch('/apps').then(r=>r.json()).then(list=>{const box=$('apps');box.innerHTML='';
+              if(!list.length){const n=document.createElement('div');n.className='none';n.textContent='Nenhum app aberto';box.append(n);}
+              list.forEach(a=>{const row=document.createElement('div');row.className='app';
+                const name=document.createElement('span');name.textContent=a.label;
+                const x=document.createElement('button');x.textContent='\\u2715';x.setAttribute('aria-label','Fechar '+a.label);
+                x.onclick=async()=>{if(await post('/apps/close?pkg='+encodeURIComponent(a.pkg),'',a.label+' fechado'))loadApps();};
+                row.append(name,x);box.append(row);});}).catch(()=>{});}
+            $('closeall').onclick=async()=>{if(await post('/apps/closeall','','Apps fechados'))loadApps();};
+            $('appsreload').onclick=loadApps;
+            loadApps();
             $('appsearch').onclick=()=>post('/appsearch',$('txt').value,'Pesquisando no app aberto');
             $('open').onclick=()=>post('/link',$('url').value,'Abrindo no projetor');
             document.querySelectorAll('[data-min]').forEach(b=>{b.onclick=()=>post('/sleep?min='+b.dataset.min,'',
@@ -261,6 +280,10 @@ final class ApkServer extends Thread {
             respond(out, 200, "text/plain; charset=utf-8", ControlService.describeState(context));
             return;
         }
+        if (method.equals("GET") && route.equals("/apps")) {
+            respond(out, 200, "application/json; charset=utf-8", OpenApps.toJson(OpenApps.list(context)));
+            return;
+        }
         if (!method.equals("POST")) {
             respond(out, 404, "text/plain; charset=utf-8", "Não encontrado");
             return;
@@ -281,6 +304,14 @@ final class ApkServer extends Thread {
                     break;
                 case "/youtube":
                     error = Commands.searchYouTube(context, readText(in, length));
+                    break;
+                case "/apps/close":
+                    OpenApps.close(context, queryParam(path, "pkg", ""));
+                    error = null;
+                    break;
+                case "/apps/closeall":
+                    OpenApps.closeAll(context);
+                    error = null;
                     break;
                 case "/appsearch":
                     error = Commands.searchInApp(context, readText(in, length));
