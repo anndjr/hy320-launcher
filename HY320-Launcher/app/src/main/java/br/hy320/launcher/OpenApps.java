@@ -2,12 +2,14 @@ package br.hy320.launcher;
 
 import android.app.ActivityManager;
 import android.app.AppOpsManager;
+import android.app.ApplicationExitInfo;
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Process;
 import android.os.SystemClock;
 
@@ -66,6 +68,8 @@ final class OpenApps {
 
         SharedPreferences closed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         PackageManager pm = context.getPackageManager();
+        ActivityManager am = context.checkSelfPermission("android.permission.DUMP") == PackageManager.PERMISSION_GRANTED
+                ? context.getSystemService(ActivityManager.class) : null;
         List<Map.Entry<String, Long>> entries = new ArrayList<>(lastOpened.entrySet());
         entries.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
         for (Map.Entry<String, Long> entry : entries) {
@@ -73,6 +77,8 @@ final class OpenApps {
             if (pkg.equals(context.getPackageName())) continue;
             // Fechado por aqui depois da última vez que abriu.
             if (closed.getLong(pkg, 0) >= entry.getValue()) continue;
+            // Ou fechado pelo próprio Android (falta de memória, travou...).
+            if (diedAfter(am, pkg, entry.getValue())) continue;
             // Só apps que aparecem pra abrir (deixa de fora telas do sistema).
             if (pm.getLaunchIntentForPackage(pkg) == null && pm.getLeanbackLaunchIntentForPackage(pkg) == null) continue;
             try {
@@ -82,6 +88,22 @@ final class OpenApps {
             }
         }
         return apps;
+    }
+
+    /**
+     * O processo principal do app terminou depois da última vez que ele foi aberto?
+     * Lê o histórico de saídas do Android 11 (precisa do DUMP: adb shell pm grant ... android.permission.DUMP).
+     */
+    private static boolean diedAfter(ActivityManager am, String pkg, long openedAt) {
+        if (am == null || Build.VERSION.SDK_INT < 30) return false;
+        try {
+            for (ApplicationExitInfo info : am.getHistoricalProcessExitReasons(pkg, 0, 5)) {
+                // A lista vem da saída mais recente pra mais antiga.
+                if (pkg.equals(info.getProcessName())) return info.getTimestamp() > openedAt;
+            }
+        } catch (SecurityException | IllegalArgumentException ignored) {
+        }
+        return false;
     }
 
     /** Fecha o app; se ele está na tela, volta pro início antes (o Android não fecha o app da frente). */
