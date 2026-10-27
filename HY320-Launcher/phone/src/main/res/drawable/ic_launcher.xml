@@ -1,17 +1,12 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-    <path
-        android:fillColor="#FF2B6CFF"
-        android:pathData="M12,0h24a12,12 0,0 1,12 12v24a12,12 0,0 1,-12 12h-24a12,12 0,0 1,-12 -12v-24a12,12 0,0 1,12 -12z" />
-    <!-- Direcional: anel com o OK no meio -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M24,10a14,14 0,1 0,0.01 0zM24,13.5a10.5,10.5 0,1 1,-0.01 0z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M24,19a5,5 0,1 0,0.01 0z" />
-</vector>
+<!-- Android 7 e anteriores: o mesmo desenho num círculo -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:angle="315"
+                android:endColor="#FF8A3FFC"
+                android:startColor="#FF3B6CFF" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/ic_launcher_fg" />
+</layer-list>

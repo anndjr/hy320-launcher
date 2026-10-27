@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Direcional: brilho, anel, quatro setas e o OK no meio (dentro da área segura de 66dp) -->
+    <path
+        android:fillAlpha="0.14"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,25a29,29 0,1 0,0.01 0z" />
+    <path
+        android:pathData="M54,29a25,25 0,1 0,0.01 0z"
+        android:strokeWidth="3.5"
+        android:strokeColor="#FFFFFFFF" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,32L60.5,40L47.5,40z M54,76L47.5,68L60.5,68z M32,54L40,47.5L40,60.5z M76,54L68,60.5L68,47.5z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,45a9,9 0,1 0,0.01 0z" />
+</vector>
