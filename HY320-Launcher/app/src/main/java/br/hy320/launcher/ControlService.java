@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -88,6 +89,27 @@ public class ControlService extends AccessibilityService {
             if (me.equals(name)) return true;
         }
         return false;
+    }
+
+    /**
+     * Religa o serviço sozinho se o firmware desligou (ele limpa a lista ao reiniciar).
+     * Só funciona depois de: adb shell pm grant br.hy320.launcher android.permission.WRITE_SECURE_SETTINGS
+     */
+    static void ensureEnabled(Context context) {
+        if (instance != null || isEnabledInSettings(context)) return;
+        if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS")
+                != PackageManager.PERMISSION_GRANTED) return;
+        String me = new ComponentName(context, ControlService.class).flattenToString();
+        String enabled = Settings.Secure.getString(context.getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        String value = enabled == null || enabled.isEmpty() ? me : enabled + ":" + me;
+        try {
+            Settings.Secure.putString(context.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, value);
+            Settings.Secure.putInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+        } catch (SecurityException e) {
+            lastProblem = "sem permissão pra religar: " + e.getMessage();
+        }
     }
 
     static String describeState(Context context) {
