@@ -65,8 +65,8 @@ public class MainActivity extends Activity {
 
     // Usados só na primeira abertura, se estiverem instalados.
     private static final String[] DEFAULT_FAVORITES = {
-            "com.teamsmart.videomanager.tv",
-            "com.liskovsoft.smarttubetv.beta",
+            "org.smarttube.stable",
+            "org.smarttube.beta",
             "com.google.android.youtube.tv",
             "com.google.android.youtube",
             "com.netflix.ninja",
@@ -128,6 +128,22 @@ public class MainActivity extends Activity {
         }
     };
 
+    // Rede em thread própria pra não atrasar a lista de apps.
+    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private LinearLayout stocks;
+    private TextView stocksTitle;
+
+    private final Runnable stocksTicker = new Runnable() {
+        @Override
+        public void run() {
+            network.execute(() -> {
+                List<Stocks.Quote> quotes = Stocks.fetch();
+                handler.post(() -> showStocks(quotes));
+            });
+            handler.postDelayed(this, 60_000);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -145,6 +161,8 @@ public class MainActivity extends Activity {
         sleepStatus = findViewById(R.id.sleep_status);
         wallpaper = findViewById(R.id.wallpaper);
         wallpaperDim = findViewById(R.id.wallpaper_dim);
+        stocks = findViewById(R.id.stocks);
+        stocksTitle = findViewById(R.id.stocks_title);
 
         String saved = prefs.getString(KEY_FAVORITES, "");
         for (String pkg : saved.split(",")) {
@@ -174,6 +192,7 @@ public class MainActivity extends Activity {
             startActivity(new Intent(this, SleepActivity.class));
         }
         handler.post(statusTicker);
+        handler.post(stocksTicker);
         loadApps();
     }
 
@@ -181,12 +200,14 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(statusTicker);
+        handler.removeCallbacks(stocksTicker);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdownNow();
+        network.shutdownNow();
     }
 
     @Override
@@ -541,6 +562,68 @@ public class MainActivity extends Activity {
         options.inSampleSize = sample;
         options.inPreferredConfig = Bitmap.Config.RGB_565;
         return BitmapFactory.decodeFile(path, options);
+    }
+
+    // ---------- Bolsa ----------
+
+    private static final int STOCK_COLUMNS = 6;
+
+    private void showStocks(List<Stocks.Quote> quotes) {
+        if (isDestroyed()) return;
+        // Sem internet: mantém as últimas cotações na tela.
+        if (quotes.isEmpty()) return;
+        stocks.removeAllViews();
+        float dp = getResources().getDisplayMetrics().density;
+        java.text.NumberFormat money = java.text.NumberFormat.getNumberInstance(new java.util.Locale("pt", "BR"));
+        long latest = 0;
+        LinearLayout row = null;
+        for (int i = 0; i < quotes.size(); i++) {
+            Stocks.Quote quote = quotes.get(i);
+            latest = Math.max(latest, quote.time);
+            if (i % STOCK_COLUMNS == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                stocks.addView(row);
+            }
+            money.setMinimumFractionDigits(quote.index ? 0 : 2);
+            money.setMaximumFractionDigits(quote.index ? 0 : 2);
+            String price = quote.index ? money.format(quote.price) + " pts" : "R$ " + money.format(quote.price);
+            boolean up = quote.changePercent >= 0;
+            String change = (up ? "▲ " : "▼ ") + String.format(new java.util.Locale("pt", "BR"), "%.2f%%", Math.abs(quote.changePercent));
+
+            LinearLayout chip = new LinearLayout(this);
+            chip.setOrientation(LinearLayout.VERTICAL);
+            chip.setPadding((int) (14 * dp), (int) (10 * dp), (int) (14 * dp), (int) (10 * dp));
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(0xCC1A2033);
+            bg.setCornerRadius(14 * dp);
+            chip.setBackground(bg);
+            chip.addView(stockText(quote.label, 14, 0xFFA9B1C7));
+            chip.addView(stockText(price, 19, 0xFFFFFFFF));
+            chip.addView(stockText(change, 14, up ? 0xFF7EE2A8 : 0xFFFF8A9A));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+            params.setMargins(0, 0, (int) (10 * dp), (int) (10 * dp));
+            row.addView(chip, params);
+        }
+        // Completa a última linha pra os cartões terem o mesmo tamanho.
+        for (int i = quotes.size() % STOCK_COLUMNS; i > 0 && i < STOCK_COLUMNS; i++) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, 0, 1);
+            params.setMargins(0, 0, (int) (10 * dp), 0);
+            row.addView(new View(this), params);
+        }
+        String time = latest > 0 ? android.text.format.DateFormat.format("HH:mm", latest).toString() : "";
+        stocksTitle.setText("Bolsa" + (time.isEmpty() ? "" : " · cotação das " + time + " (B3 tem ~15 min de atraso)"));
+        stocksTitle.setVisibility(View.VISIBLE);
+    }
+
+    private TextView stockText(String text, int sp, int color) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(sp);
+        view.setTextColor(color);
+        view.setSingleLine(true);
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        return view;
     }
 
     // ---------- Atalhos e status ----------

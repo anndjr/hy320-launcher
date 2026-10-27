@@ -79,7 +79,8 @@ final class Commands {
     }
 
     /** SmartTube estável e beta: YouTube sem anúncios, preferido no lugar do oficial. */
-    static final String[] SMARTTUBE = {"com.teamsmart.videomanager.tv", "com.liskovsoft.smarttubetv.beta"};
+    static final String[] SMARTTUBE = {"org.smarttube.stable", "org.smarttube.beta",
+            "com.teamsmart.videomanager.tv", "com.liskovsoft.smarttubetv.beta"};
 
     static String searchYouTube(Context context, String query) {
         query = query.trim();
