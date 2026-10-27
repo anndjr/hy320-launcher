@@ -98,8 +98,11 @@ final class OpenApps {
         if (am == null || Build.VERSION.SDK_INT < 30) return false;
         try {
             for (ApplicationExitInfo info : am.getHistoricalProcessExitReasons(pkg, 0, 5)) {
-                // A lista vem da saída mais recente pra mais antiga.
-                if (pkg.equals(info.getProcessName())) return info.getTimestamp() > openedAt;
+                // A lista vem da saída mais recente pra mais antiga. Neste firmware nomes longos
+                // vêm cortados ("com.softwinner.Tvd"), então vale o começo do nome também.
+                String name = info.getProcessName();
+                boolean main = pkg.equals(name) || (name != null && name.length() >= 15 && pkg.startsWith(name));
+                if (main) return info.getTimestamp() > openedAt;
             }
         } catch (SecurityException | IllegalArgumentException ignored) {
         }
