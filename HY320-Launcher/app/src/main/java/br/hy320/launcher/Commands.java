@@ -42,9 +42,11 @@ final class Commands {
                 return null;
             default:
                 // Tecla de verdade (funciona em qualquer app, inclusive YouTube); se não der, acessibilidade.
+                // Início vai pela acessibilidade: o firmware ignora a tecla Home vinda do teclado.
+                ControlService service = ControlService.instance;
+                if (key.equals("home") && service != null && service.key(key)) return null;
                 int code = KeyInjector.code(key);
                 if (code != 0 && KeyInjector.press(code)) return null;
-                ControlService service = ControlService.instance;
                 if (service == null) return needControl(context);
                 return service.key(key) ? null : "Não deu pra fazer isso nessa tela";
         }
