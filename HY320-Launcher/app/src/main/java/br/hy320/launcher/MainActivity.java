@@ -169,20 +169,40 @@ public class MainActivity extends Activity {
             if (!pkg.isEmpty()) hidden.add(pkg);
         }
 
+        // Cinco atalhos, cabem na tela sem rolar. Wi-Fi, Bluetooth, Som e Sistema ficam em "Ajustes".
+        addShortcut(R.drawable.ic_apps, "Apps abertos", this::openApps);
         addShortcut(R.drawable.ic_phone, "Celular",
                 () -> startSafely(new Intent(this, ReceiveActivity.class)));
-        addShortcut(R.drawable.ic_apps, "Apps abertos",
-                () -> startSafely(new Intent(this, OpenAppsActivity.class)));
         addShortcut(R.drawable.ic_chart, "Bolsa",
                 () -> startSafely(new Intent(this, StocksActivity.class)));
-        addShortcut(R.drawable.ic_timer, "Timer de dormir", this::showSleepTimer);
-        addShortcut(R.drawable.ic_flash, "Limpar memória", this::cleanMemory);
-        addShortcut(R.drawable.ic_wifi, "Wi-Fi", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
-        addShortcut(R.drawable.ic_bluetooth, "Bluetooth", () -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS));
-        addShortcut(R.drawable.ic_volume, "Som", () -> openSettings(Settings.ACTION_SOUND_SETTINGS));
-        addShortcut(R.drawable.ic_info, "Sistema", this::showSystemInfo);
-        addShortcut(R.drawable.ic_settings, "Configurações", () -> openSettings(Settings.ACTION_SETTINGS));
+        addShortcut(R.drawable.ic_timer, "Timer", this::showSleepTimer);
+        addShortcut(R.drawable.ic_settings, "Ajustes", this::showSettingsMenu);
         shortcutsRow.getChildAt(0).requestFocus();
+
+        // Os indicadores do topo também são botões.
+        for (View pill : new View[]{sleepStatus, memoryStatus, networkStatus}) pill.setOnFocusChangeListener(FOCUS_ZOOM);
+        sleepStatus.setOnClickListener(v -> showSleepTimer());
+        memoryStatus.setOnClickListener(v -> openApps());
+        networkStatus.setOnClickListener(v -> openSettings(Settings.ACTION_WIFI_SETTINGS));
+    }
+
+    private void openApps() {
+        startSafely(new Intent(this, OpenAppsActivity.class));
+    }
+
+    private void showSettingsMenu() {
+        String[] labels = {"Wi-Fi", "Bluetooth", "Som", "Sistema", "Todas as configurações"};
+        Runnable[] actions = {
+                () -> openSettings(Settings.ACTION_WIFI_SETTINGS),
+                () -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS),
+                () -> openSettings(Settings.ACTION_SOUND_SETTINGS),
+                this::showSystemInfo,
+                () -> openSettings(Settings.ACTION_SETTINGS),
+        };
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Ajustes")
+                .setItems(labels, (dialog, which) -> actions[which].run())
+                .show();
     }
 
     @Override
@@ -274,7 +294,9 @@ public class MainActivity extends Activity {
         if (!prefs.contains(KEY_FAVORITES)) seedFavorites();
         renderFavorites();
         renderGrid();
-        refocusIfLost();
+        // Primeira vez: começa no primeiro favorito, que é o que mais se abre.
+        if (!bootChecked) focusFirst();
+        else refocusIfLost();
         if (!bootChecked) {
             bootChecked = true;
             maybeLaunchOnBoot();

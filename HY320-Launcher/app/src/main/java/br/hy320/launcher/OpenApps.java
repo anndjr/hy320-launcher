@@ -121,10 +121,42 @@ final class OpenApps {
                 .putLong(pkg, System.currentTimeMillis()).apply();
     }
 
-    static int closeAll(Context context) {
+    static final class Result {
+        final int closed;
+        final long freedBytes;
+
+        Result(int closed, long freedBytes) {
+            this.closed = closed;
+            this.freedBytes = freedBytes;
+        }
+    }
+
+    /** Fecha os apps da lista e o que roda escondido em segundo plano; mede a memória liberada. */
+    static Result closeAll(Context context) {
+        ActivityManager am = context.getSystemService(ActivityManager.class);
+        long before = freeMemory(am);
         List<App> apps = list(context);
         for (App app : apps) close(context, app.pkg);
-        return apps.size();
+        for (android.content.pm.ApplicationInfo info : context.getPackageManager().getInstalledApplications(0)) {
+            if (!info.packageName.equals(context.getPackageName())) am.killBackgroundProcesses(info.packageName);
+        }
+        SystemClock.sleep(800); // dá tempo do sistema recolher a memória
+        return new Result(apps.size(), Math.max(0, freeMemory(am) - before));
+    }
+
+    /** "2 apps fechados · 150 MB liberados" */
+    static String describe(Context context, Result result) {
+        String apps = result.closed == 0 ? "" : result.closed == 1 ? "1 app fechado · " : result.closed + " apps fechados · ";
+        String memory = result.freedBytes > 1024 * 1024
+                ? android.text.format.Formatter.formatShortFileSize(context, result.freedBytes) + " liberados"
+                : "a memória já estava limpa";
+        return apps + memory;
+    }
+
+    private static long freeMemory(ActivityManager am) {
+        ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(info);
+        return info.availMem;
     }
 
     static String toJson(List<App> apps) {

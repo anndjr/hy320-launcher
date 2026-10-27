@@ -56,7 +56,7 @@ public class OpenAppsActivity extends Activity {
         message.setPadding(0, px(4), 0, px(16));
         root.addView(message);
 
-        closeAll = pill(R.drawable.ic_close, "Fechar todos", v -> closeAll());
+        closeAll = pill(R.drawable.ic_flash, "Fechar todos e liberar memória", v -> closeAll());
         root.addView(closeAll, wrap());
 
         list = new LinearLayout(this);
@@ -99,7 +99,8 @@ public class OpenAppsActivity extends Activity {
         } else {
             message.setText(apps.size() == 1 ? "1 app aberto" : apps.size() + " apps abertos");
         }
-        closeAll.setVisibility(apps.isEmpty() ? View.GONE : View.VISIBLE);
+        // Sem apps na lista o botão continua: ainda libera o que roda escondido em segundo plano.
+        ((TextView) closeAll.findViewById(R.id.label)).setText(apps.isEmpty() ? "Liberar memória" : "Fechar todos e liberar memória");
 
         PackageManager pm = getPackageManager();
         for (OpenApps.App app : apps) {
@@ -127,6 +128,7 @@ public class OpenAppsActivity extends Activity {
             list.addView(row);
         }
         if (!apps.isEmpty()) list.getChildAt(0).findViewWithTag("close").requestFocus();
+        else closeAll.requestFocus();
     }
 
     private void open(String pkg) {
@@ -149,7 +151,8 @@ public class OpenAppsActivity extends Activity {
                 message.setText(left == 0 ? "Nenhum app aberto agora."
                         : left == 1 ? "1 app aberto" : left + " apps abertos");
                 if (left == 0) {
-                    closeAll.setVisibility(View.GONE);
+                    ((TextView) closeAll.findViewById(R.id.label)).setText("Liberar memória");
+                    closeAll.requestFocus();
                 } else {
                     list.getChildAt(Math.min(index, left - 1)).findViewWithTag("close").requestFocus();
                 }
@@ -159,9 +162,9 @@ public class OpenAppsActivity extends Activity {
 
     private void closeAll() {
         executor.execute(() -> {
-            int count = OpenApps.closeAll(this);
+            OpenApps.Result result = OpenApps.closeAll(this);
             handler.post(() -> {
-                Toast.makeText(this, count == 1 ? "1 app fechado" : count + " apps fechados", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, OpenApps.describe(this, result), Toast.LENGTH_LONG).show();
                 reload();
             });
         });
