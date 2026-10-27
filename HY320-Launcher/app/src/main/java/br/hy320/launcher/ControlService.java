@@ -1,15 +1,17 @@
 package br.hy320.launcher;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.Toast;
 
 import java.io.IOException;
 
@@ -17,23 +19,27 @@ import java.io.IOException;
  * "HY Controle": serviço de acessibilidade que mantém o servidor do celular
  * ligado e executa setas, OK, voltar, digitação e o timer de dormir.
  */
-public class ControlService extends AccessibilityService implements ApkServer.Listener {
+public class ControlService extends AccessibilityService {
 
     static volatile ControlService instance;
+    /** Último problema ao iniciar, mostrado no /status pra diagnóstico. */
+    static volatile String lastProblem;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable sleepTask = this::sleepNow;
-    private ApkServer server;
+    private boolean holdsServer;
     private volatile long sleepAt;
 
     @Override
     protected void onServiceConnected() {
+        super.onServiceConnected();
         instance = this;
+        lastProblem = null;
         try {
-            server = new ApkServer(this, this);
-            server.start();
+            ApkServer.acquire(this);
+            holdsServer = true;
         } catch (IOException e) {
-            server = null;
+            lastProblem = "servidor não abriu: " + e.getMessage();
         }
     }
 
@@ -50,12 +56,12 @@ public class ControlService extends AccessibilityService implements ApkServer.Li
     }
 
     private void stop() {
-        instance = null;
+        if (instance == this) instance = null;
         handler.removeCallbacks(sleepTask);
         sleepAt = 0;
-        if (server != null) {
-            server.shutdown();
-            server = null;
+        if (holdsServer) {
+            holdsServer = false;
+            ApkServer.release();
         }
     }
 
@@ -67,8 +73,38 @@ public class ControlService extends AccessibilityService implements ApkServer.Li
     public void onInterrupt() {
     }
 
-    ApkServer getServer() {
-        return server;
+    // ---------- Estado (pra tela Celular e /status) ----------
+
+    /** O usuário ligou o HY Controle em Acessibilidade? */
+    static boolean isEnabledInSettings(Context context) {
+        String enabled = Settings.Secure.getString(context.getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabled == null) return false;
+        ComponentName me = new ComponentName(context, ControlService.class);
+        for (String item : enabled.split(":")) {
+            ComponentName name = ComponentName.unflattenFromString(item);
+            if (me.equals(name)) return true;
+        }
+        return false;
+    }
+
+    static String describeState(Context context) {
+        boolean enabled = isEnabledInSettings(context);
+        StringBuilder text = new StringBuilder("HY Controle: ");
+        if (instance != null) {
+            text.append("conectado e funcionando");
+        } else if (enabled) {
+            text.append("ligado nas configurações, mas o Android não iniciou o serviço.")
+                    .append("\nTente: desligar e ligar de novo em Acessibilidade, ou reiniciar o projetor.");
+        } else {
+            text.append("desligado. Ative em Configurações > Acessibilidade > HY Controle.");
+            if (Build.VERSION.SDK_INT >= 33) {
+                text.append("\nSe estiver bloqueado: Configurações > Apps > HY Home > menu (⋮) > Permitir configurações restritas.");
+            }
+        }
+        if (lastProblem != null) text.append("\nProblema: ").append(lastProblem);
+        text.append("\nAndroid ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")");
+        return text.toString();
     }
 
     // ---------- Controle ----------
@@ -165,21 +201,5 @@ public class ControlService extends AccessibilityService implements ApkServer.Li
         if (Build.VERSION.SDK_INT >= 28) {
             handler.postDelayed(() -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN), 2000);
         }
-    }
-
-    // ---------- Avisos do servidor (quando a tela Celular não está aberta) ----------
-
-    @Override
-    public void onProgress(String fileName, int percent) {
-    }
-
-    @Override
-    public void onInstalling(String fileName) {
-        handler.post(() -> Toast.makeText(this, "Instalando " + fileName + "…", Toast.LENGTH_SHORT).show());
-    }
-
-    @Override
-    public void onError(String message) {
-        handler.post(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
     }
 }

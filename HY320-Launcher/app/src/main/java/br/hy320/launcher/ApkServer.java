@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -59,6 +62,7 @@ final class ApkServer extends Thread {
             #toast.show{opacity:1}#toast.bad{background:#b3364a}
             </style></head><body>
             <h1>HY Home &middot; controle</h1>
+            <div class="card" id="state" style="display:none"></div>
 
             <div class="card"><h2>Controle</h2>
             <div class="pad">
@@ -128,22 +132,63 @@ final class ApkServer extends Thread {
             $('wpsend').onclick=()=>{const f=$('wp').files[0];if(!f){toast('Escolha uma foto',true);return;}
               toast('Enviando...');post('/wallpaper',f,'Papel de parede trocado');};
             $('wpreset').onclick=()=>post('/wallpaper/reset','','Papel de parede removido');
+            fetch('/status').then(r=>r.text()).then(t=>{const s=$('state');s.textContent=t;s.style.display='block';
+              s.style.whiteSpace='pre-line';s.style.color=t.indexOf('conectado e funcionando')>=0?'#7ee2a8':'#ffb4c0';});
             </script></body></html>
             """;
 
+    // Um servidor só por processo, compartilhado entre o HY Controle e a tela Celular.
+    private static ApkServer shared;
+    private static int users;
+
     private final Context context;
     private final ServerSocket server;
+    private final Listener toaster;
     private volatile Listener listener;
 
-    ApkServer(Context context, Listener listener) throws IOException {
+    private ApkServer(Context context) throws IOException {
         super("ApkServer");
         this.context = context.getApplicationContext();
-        this.listener = listener;
         this.server = openSocket();
+        Handler main = new Handler(Looper.getMainLooper());
+        this.toaster = new Listener() {
+            @Override
+            public void onProgress(String fileName, int percent) {
+            }
+
+            @Override
+            public void onInstalling(String fileName) {
+                main.post(() -> Toast.makeText(ApkServer.this.context,
+                        "Instalando " + fileName + "…", Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onError(String message) {
+                main.post(() -> Toast.makeText(ApkServer.this.context, message, Toast.LENGTH_LONG).show());
+            }
+        };
+        this.listener = toaster;
     }
 
+    static synchronized ApkServer acquire(Context context) throws IOException {
+        if (shared == null) {
+            shared = new ApkServer(context);
+            shared.start();
+        }
+        users++;
+        return shared;
+    }
+
+    static synchronized void release() {
+        if (--users > 0 || shared == null) return;
+        shared.shutdown();
+        shared = null;
+        users = 0;
+    }
+
+    /** null volta pros avisos padrão (Toast). */
     void setListener(Listener listener) {
-        this.listener = listener;
+        this.listener = listener != null ? listener : toaster;
     }
 
     int getPort() {
@@ -211,6 +256,10 @@ final class ApkServer extends Thread {
             respond(out, 200, "text/html; charset=utf-8", PAGE);
             return;
         }
+        if (method.equals("GET") && route.equals("/status")) {
+            respond(out, 200, "text/plain; charset=utf-8", ControlService.describeState(context));
+            return;
+        }
         if (!method.equals("POST")) {
             respond(out, 404, "text/plain; charset=utf-8", "Não encontrado");
             return;
@@ -226,7 +275,8 @@ final class ApkServer extends Thread {
                     error = Commands.key(context, queryParam(path, "k", ""));
                     break;
                 case "/text":
-                    error = Commands.text(readText(in, length), "1".equals(queryParam(path, "enter", "0")));
+                    error = Commands.text(context, readText(in, length),
+                            "1".equals(queryParam(path, "enter", "0")));
                     break;
                 case "/youtube":
                     error = Commands.searchYouTube(context, readText(in, length));
@@ -235,7 +285,7 @@ final class ApkServer extends Thread {
                     error = Commands.openLink(context, readText(in, length));
                     break;
                 case "/sleep":
-                    error = Commands.sleep(Integer.parseInt(queryParam(path, "min", "0")));
+                    error = Commands.sleep(context, Integer.parseInt(queryParam(path, "min", "0")));
                     break;
                 case "/wallpaper":
                     error = Commands.saveWallpaper(context, in, length);

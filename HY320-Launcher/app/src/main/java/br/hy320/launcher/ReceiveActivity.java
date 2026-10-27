@@ -20,10 +20,10 @@ import java.io.IOException;
  */
 public class ReceiveActivity extends Activity implements ApkServer.Listener {
 
-    private ApkServer ownServer;
-    private ControlService sharedService;
+    private ApkServer server;
     private TextView address;
     private TextView status;
+    private TextView controlState;
     private View controlBox;
     private View permissionBox;
 
@@ -34,6 +34,7 @@ public class ReceiveActivity extends Activity implements ApkServer.Listener {
         address = findViewById(R.id.address);
         status = findViewById(R.id.status);
         controlBox = findViewById(R.id.control_box);
+        controlState = findViewById(R.id.control_state);
         permissionBox = findViewById(R.id.permission_box);
         findViewById(R.id.allow_button).setOnClickListener(v -> openInstallPermission());
         findViewById(R.id.control_button).setOnClickListener(v -> open(
@@ -50,21 +51,13 @@ public class ReceiveActivity extends Activity implements ApkServer.Listener {
             return;
         }
 
-        ControlService service = ControlService.instance;
-        ApkServer server = service != null ? service.getServer() : null;
-        if (server != null) {
-            sharedService = service;
+        try {
+            server = ApkServer.acquire(this);
             server.setListener(this);
-        } else {
-            try {
-                ownServer = new ApkServer(this, this);
-                ownServer.start();
-                server = ownServer;
-            } catch (IOException e) {
-                address.setText("—");
-                status.setText("Não foi possível iniciar a conexão");
-                return;
-            }
+        } catch (IOException e) {
+            address.setText("—");
+            status.setText("Não foi possível iniciar a conexão");
+            return;
         }
         address.setText("http://" + ip + ":" + server.getPort());
         status.setText("Pronto! Abra o endereço no celular");
@@ -75,6 +68,7 @@ public class ReceiveActivity extends Activity implements ApkServer.Listener {
         super.onResume();
         boolean controlOn = ControlService.instance != null;
         controlBox.setVisibility(controlOn ? View.GONE : View.VISIBLE);
+        controlState.setText(ControlService.describeState(this));
 
         boolean installAllowed = Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls();
         permissionBox.setVisibility(installAllowed ? View.GONE : View.VISIBLE);
@@ -89,14 +83,10 @@ public class ReceiveActivity extends Activity implements ApkServer.Listener {
     @Override
     protected void onStop() {
         super.onStop();
-        if (ownServer != null) {
-            ownServer.shutdown();
-            ownServer = null;
-        }
-        if (sharedService != null) {
-            ApkServer server = sharedService.getServer();
-            if (server != null) server.setListener(sharedService);
-            sharedService = null;
+        if (server != null) {
+            server.setListener(null);
+            server = null;
+            ApkServer.release();
         }
     }
 

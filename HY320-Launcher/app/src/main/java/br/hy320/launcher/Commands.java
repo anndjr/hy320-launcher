@@ -17,10 +17,13 @@ import java.io.OutputStream;
 /** Comandos que chegam do celular. Cada um retorna null se deu certo, ou a mensagem de erro. */
 final class Commands {
 
-    static final String NEED_CONTROL =
-            "Ative o HY Controle no projetor (Acessibilidade). Veja a tela Celular no launcher.";
-
     private static final long MAX_WALLPAPER = 20L * 1024 * 1024;
+
+    private static String needControl(Context context) {
+        return ControlService.isEnabledInSettings(context)
+                ? "O HY Controle está ligado, mas o Android não iniciou ele. Desligue e ligue de novo em Acessibilidade, ou reinicie o projetor."
+                : "Ative o HY Controle no projetor: Configurações > Acessibilidade > HY Controle.";
+    }
 
     private Commands() {
     }
@@ -39,14 +42,14 @@ final class Commands {
                 return null;
             default:
                 ControlService service = ControlService.instance;
-                if (service == null) return NEED_CONTROL;
+                if (service == null) return needControl(context);
                 return service.key(key) ? null : "Não deu pra fazer isso nessa tela";
         }
     }
 
-    static String text(String text, boolean enter) {
+    static String text(Context context, String text, boolean enter) {
         ControlService service = ControlService.instance;
-        return service == null ? NEED_CONTROL : service.setText(text, enter);
+        return service == null ? needControl(context) : service.setText(text, enter);
     }
 
     static String openLink(Context context, String url) {
@@ -70,9 +73,9 @@ final class Commands {
         return start(context, new Intent(Intent.ACTION_VIEW, web)) ? null : "YouTube não encontrado";
     }
 
-    static String sleep(int minutes) {
+    static String sleep(Context context, int minutes) {
         ControlService service = ControlService.instance;
-        if (service == null) return NEED_CONTROL;
+        if (service == null) return needControl(context);
         service.setSleepTimer(minutes);
         return null;
     }
