@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HY Home</string>
+    <string name="control_name">HY Controle</string>
+    <string name="control_description">Permite controlar o projetor pelo celular (setas, OK, voltar, digitar texto) e usar o timer de dormir do HY Home.</string>
 </resources>
