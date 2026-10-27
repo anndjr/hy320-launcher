@@ -40,6 +40,8 @@ public class ControlService extends AccessibilityService {
         super.onServiceConnected();
         instance = this;
         lastProblem = null;
+        // Enquanto o serviço roda, vigia a configuração mesmo sem a tela inicial aberta.
+        watch(this);
         try {
             ApkServer.acquire(this);
             holdsServer = true;
