@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.net.Uri;
-import android.view.KeyEvent;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,38 +41,12 @@ final class Commands {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI);
                 return null;
             default:
-                int code = keyCode(key);
+                // Tecla de verdade (funciona em qualquer app, inclusive YouTube); se não der, acessibilidade.
+                int code = KeyInjector.code(key);
+                if (code != 0 && KeyInjector.press(code)) return null;
                 ControlService service = ControlService.instance;
-                boolean arrow = code != KeyEvent.KEYCODE_BACK && code != KeyEvent.KEYCODE_HOME;
-                // Setas e OK: tecla de verdade pelo ADB (funciona no YouTube); Voltar/Início: acessibilidade, que é mais rápida.
-                if (arrow && code != 0 && KeyInjector.press(linuxCode(code))) return null;
-                if (arrow && code != 0 && AdbClient.key(context, code)) return null;
-                if (service != null && service.key(key)) return null;
-                if (!arrow && AdbClient.key(context, code)) return null;
-                return service == null ? needControl(context) : "Não deu pra fazer isso nessa tela";
-        }
-    }
-
-    private static int linuxCode(int androidCode) {
-        switch (androidCode) {
-            case KeyEvent.KEYCODE_DPAD_UP: return KeyInjector.KEY_UP;
-            case KeyEvent.KEYCODE_DPAD_DOWN: return KeyInjector.KEY_DOWN;
-            case KeyEvent.KEYCODE_DPAD_LEFT: return KeyInjector.KEY_LEFT;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: return KeyInjector.KEY_RIGHT;
-            default: return KeyInjector.KEY_OK;
-        }
-    }
-
-    private static int keyCode(String key) {
-        switch (key) {
-            case "up": return KeyEvent.KEYCODE_DPAD_UP;
-            case "down": return KeyEvent.KEYCODE_DPAD_DOWN;
-            case "left": return KeyEvent.KEYCODE_DPAD_LEFT;
-            case "right": return KeyEvent.KEYCODE_DPAD_RIGHT;
-            case "ok": return KeyEvent.KEYCODE_DPAD_CENTER;
-            case "back": return KeyEvent.KEYCODE_BACK;
-            case "home": return KeyEvent.KEYCODE_HOME;
-            default: return 0;
+                if (service == null) return needControl(context);
+                return service.key(key) ? null : "Não deu pra fazer isso nessa tela";
         }
     }
 

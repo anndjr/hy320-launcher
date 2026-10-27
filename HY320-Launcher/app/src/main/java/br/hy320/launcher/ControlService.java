@@ -136,7 +136,6 @@ public class ControlService extends AccessibilityService {
         app.getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED), false, observer);
         ensureEnabled(app);
-        AdbClient.warmUp(app);
     }
 
     static String describeState(Context context) {
@@ -154,8 +153,7 @@ public class ControlService extends AccessibilityService {
             }
         }
         if (lastProblem != null) text.append("\nProblema: ").append(lastProblem);
-        text.append("\nSetas pelo ADB: ").append(AdbClient.ready ? "funcionando"
-                : AdbClient.lastProblem != null ? "não (" + AdbClient.lastProblem + ")" : "ainda não testado");
+        text.append("\nTeclas diretas: ").append(KeyInjector.available() ? "funcionando" : "indisponíveis");
         if (instance == null) {
             // Detalhes crus pra descobrir onde o firmware trava.
             String raw = Settings.Secure.getString(context.getContentResolver(),
@@ -268,8 +266,21 @@ public class ControlService extends AccessibilityService {
         // O launcher abre a tela escura assim que volta pro início.
         MainActivity.sleepRequested = true;
         performGlobalAction(GLOBAL_ACTION_HOME);
-        if (Build.VERSION.SDK_INT >= 28) {
-            handler.postDelayed(() -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN), 2000);
+        // Abre o menu de energia e escolhe "Desligar"; se não achar, fica só a tela escura.
+        handler.postDelayed(() -> {
+            performGlobalAction(GLOBAL_ACTION_POWER_DIALOG);
+            handler.postDelayed(this::clickPowerOff, 2000);
+        }, 1500);
+    }
+
+    private void clickPowerOff() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        for (String label : new String[]{"Desligar", "Power off", "Shut down"}) {
+            for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(label)) {
+                while (node != null && !node.isClickable()) node = node.getParent();
+                if (node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return;
+            }
         }
     }
 }

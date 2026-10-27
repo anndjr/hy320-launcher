@@ -17,14 +17,31 @@ import java.nio.file.Files;
  */
 final class KeyInjector {
 
-    // Códigos de tecla do Linux (não os do Android).
-    static final int KEY_UP = 103, KEY_LEFT = 105, KEY_RIGHT = 106, KEY_DOWN = 108, KEY_OK = 352;
-
     private static final String[] DEVICE_NAMES = {"sunxi-keyboard", "sunxi-ir-uinput"};
     private static File device;
     private static boolean searched;
 
     private KeyInjector() {
+    }
+
+    /** Código de tecla do Linux (não o do Android) pro comando do celular; 0 se não existir. */
+    static int code(String key) {
+        switch (key) {
+            case "up": return 103;
+            case "down": return 108;
+            case "left": return 105;
+            case "right": return 106;
+            case "ok": return 352;
+            case "back": return 158;
+            case "home": return 102;
+            default: return 0;
+        }
+    }
+
+    static boolean available() {
+        synchronized (KeyInjector.class) {
+            return device() != null;
+        }
     }
 
     static synchronized boolean press(int code) {
