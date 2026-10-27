@@ -97,18 +97,37 @@ public class ControlService extends AccessibilityService {
      * Religa o serviço sozinho se o firmware desligou (ele limpa a lista ao reiniciar).
      * Só funciona depois de: adb shell pm grant br.hy320.launcher android.permission.WRITE_SECURE_SETTINGS
      */
+    private static long lastKick;
+
     static void ensureEnabled(Context context) {
-        if (isEnabledInSettings(context)
-                && Settings.Secure.getInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1) return;
+        boolean listed = isEnabledInSettings(context)
+                && Settings.Secure.getInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1;
+        // Ligado e rodando; ou acabou de ser religado e o Android ainda está iniciando.
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (listed && (instance != null || now - lastKick < 20_000)) return;
         if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS")
                 != PackageManager.PERMISSION_GRANTED) return;
-        String me = new ComponentName(context, ControlService.class).flattenToString();
+        lastKick = now;
+        ComponentName meName = new ComponentName(context, ControlService.class);
+        String me = meName.flattenToString();
         String enabled = Settings.Secure.getString(context.getContentResolver(),
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        String value = enabled == null || enabled.isEmpty() ? me : enabled + ":" + me;
+        StringBuilder others = new StringBuilder();
+        if (enabled != null) {
+            for (String item : enabled.split(":")) {
+                if (item.isEmpty() || meName.equals(ComponentName.unflattenFromString(item))) continue;
+                if (others.length() > 0) others.append(':');
+                others.append(item);
+            }
+        }
         try {
-            Settings.Secure.putString(context.getContentResolver(),
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, value);
+            // Na lista mas parado (ex.: app forçado a parar): o Android só religa se a lista mudar.
+            if (listed) {
+                Settings.Secure.putString(context.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, others.toString());
+            }
+            Settings.Secure.putString(context.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                    others.length() == 0 ? me : others + ":" + me);
             Settings.Secure.putInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
         } catch (SecurityException e) {
             lastProblem = "sem permissão pra religar: " + e.getMessage();
