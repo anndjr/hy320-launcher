@@ -30,18 +30,24 @@ jobs:
       - name: Compilar
         run: gradle assembleRelease --no-daemon
 
-      - name: Renomear APK
-        run: cp app/build/outputs/apk/release/app-release.apk HY320-Launcher.apk
+      - name: Renomear APKs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk HY320-Launcher.apk
+          cp phone/build/outputs/apk/release/phone-release.apk HY-Controle.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: HY320-Launcher
-          path: HY320-Launcher/HY320-Launcher.apk
+          path: |
+            HY320-Launcher/HY320-Launcher.apk
+            HY320-Launcher/HY-Controle.apk
 
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: HY Home 1.0.${{ github.run_number }}
-          files: HY320-Launcher/HY320-Launcher.apk
+          files: |
+            HY320-Launcher/HY320-Launcher.apk
+            HY320-Launcher/HY-Controle.apk
           make_latest: true
