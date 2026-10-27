@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
 import android.net.LinkAddress;
@@ -34,15 +36,18 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.net.Inet4Address;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,6 +56,12 @@ public class MainActivity extends Activity {
     private static final int COLUMNS = 6;
     private static final String PREFS = "launcher";
     private static final String KEY_FAVORITES = "favorites";
+    private static final String KEY_HIDDEN = "hidden";
+    private static final String KEY_BOOT_APP = "boot_app";
+    private static final String KEY_LAST_BOOT = "last_boot";
+
+    /** Marcado pelo timer de dormir: ao voltar pro início, abre a tela escura. */
+    static volatile boolean sleepRequested;
 
     // Usados só na primeira abertura, se estiverem instalados.
     private static final String[] DEFAULT_FAVORITES = {
@@ -89,7 +100,10 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, AppInfo> apps = new LinkedHashMap<>();
     private final List<String> favorites = new ArrayList<>();
+    private final Set<String> hidden = new HashSet<>();
     private volatile String appsSignature = "";
+    private long wallpaperStamp = -1;
+    private boolean bootChecked;
 
     private ScrollView scroll;
     private LinearLayout favoritesRow;
@@ -98,6 +112,9 @@ public class MainActivity extends Activity {
     private TextView greeting;
     private TextView networkStatus;
     private TextView memoryStatus;
+    private TextView sleepStatus;
+    private ImageView wallpaper;
+    private View wallpaperDim;
     private LayoutInflater inflater;
     private SharedPreferences prefs;
 
@@ -123,15 +140,22 @@ public class MainActivity extends Activity {
         greeting = findViewById(R.id.greeting);
         networkStatus = findViewById(R.id.network_status);
         memoryStatus = findViewById(R.id.memory_status);
+        sleepStatus = findViewById(R.id.sleep_status);
+        wallpaper = findViewById(R.id.wallpaper);
+        wallpaperDim = findViewById(R.id.wallpaper_dim);
 
         String saved = prefs.getString(KEY_FAVORITES, "");
         for (String pkg : saved.split(",")) {
             if (!pkg.isEmpty()) favorites.add(pkg);
         }
+        for (String pkg : prefs.getString(KEY_HIDDEN, "").split(",")) {
+            if (!pkg.isEmpty()) hidden.add(pkg);
+        }
 
-        addShortcut(R.drawable.ic_flash, "Limpar memória", this::cleanMemory);
-        addShortcut(R.drawable.ic_download, "Receber APK",
+        addShortcut(R.drawable.ic_phone, "Celular",
                 () -> startSafely(new Intent(this, ReceiveActivity.class)));
+        addShortcut(R.drawable.ic_timer, "Timer de dormir", this::showSleepTimer);
+        addShortcut(R.drawable.ic_flash, "Limpar memória", this::cleanMemory);
         addShortcut(R.drawable.ic_wifi, "Wi-Fi", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
         addShortcut(R.drawable.ic_bluetooth, "Bluetooth", () -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS));
         addShortcut(R.drawable.ic_volume, "Som", () -> openSettings(Settings.ACTION_SOUND_SETTINGS));
@@ -143,6 +167,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (sleepRequested) {
+            sleepRequested = false;
+            startActivity(new Intent(this, SleepActivity.class));
+        }
         handler.post(statusTicker);
         loadApps();
     }
@@ -224,8 +252,27 @@ public class MainActivity extends Activity {
         if (!prefs.contains(KEY_FAVORITES)) seedFavorites();
         renderFavorites();
         renderGrid();
+        refocusIfLost();
+        if (!bootChecked) {
+            bootChecked = true;
+            maybeLaunchOnBoot();
+        }
+    }
+
+    private void refocusIfLost() {
         View focused = getCurrentFocus();
         if (focused == null || !focused.isAttachedToWindow()) focusFirst();
+    }
+
+    /** Abre o app escolhido uma vez por inicialização do projetor. */
+    private void maybeLaunchOnBoot() {
+        long bootId = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+        if (bootId < 0) bootId = (System.currentTimeMillis() - SystemClock.elapsedRealtime()) / 60000;
+        if (bootId == prefs.getLong(KEY_LAST_BOOT, Long.MIN_VALUE)) return;
+        prefs.edit().putLong(KEY_LAST_BOOT, bootId).apply();
+
+        AppInfo app = apps.get(prefs.getString(KEY_BOOT_APP, ""));
+        if (app != null) handler.postDelayed(() -> startSafely(app.launch), 800);
     }
 
     private void seedFavorites() {
@@ -254,19 +301,36 @@ public class MainActivity extends Activity {
 
     private void renderGrid() {
         appsGrid.removeAllViews();
-        LinearLayout row = null;
-        int i = 0;
+        List<View> tiles = new ArrayList<>();
+        int hiddenCount = 0;
         for (AppInfo app : apps.values()) {
-            if (i++ % COLUMNS == 0) {
+            if (hidden.contains(app.pkg)) {
+                hiddenCount++;
+                continue;
+            }
+            View tile = inflater.inflate(R.layout.item_tile, appsGrid, false);
+            bindApp(tile, app);
+            tiles.add(tile);
+        }
+        if (hiddenCount > 0) {
+            View tile = inflater.inflate(R.layout.item_tile, appsGrid, false);
+            ((ImageView) tile.findViewById(R.id.icon)).setImageResource(R.drawable.ic_hidden);
+            ((TextView) tile.findViewById(R.id.label)).setText("Ocultos (" + hiddenCount + ")");
+            tile.setOnFocusChangeListener(FOCUS_ZOOM);
+            tile.setOnClickListener(v -> showHiddenApps());
+            tiles.add(tile);
+        }
+
+        LinearLayout row = null;
+        for (int i = 0; i < tiles.size(); i++) {
+            if (i % COLUMNS == 0) {
                 row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setClipChildren(false);
                 row.setClipToPadding(false);
                 appsGrid.addView(row);
             }
-            View tile = inflater.inflate(R.layout.item_tile, row, false);
-            bindApp(tile, app);
-            row.addView(tile);
+            row.addView(tiles.get(i));
         }
         // Completa a última linha com espaços vazios pra manter o tamanho das colunas.
         while (row != null && row.getChildCount() < COLUMNS) {
@@ -325,6 +389,24 @@ public class MainActivity extends Activity {
                 onFavoritesChanged(app.pkg);
             });
         }
+        labels.add("Esconder app");
+        actions.add(() -> {
+            hidden.add(app.pkg);
+            favorites.remove(app.pkg);
+            saveHidden();
+            onFavoritesChanged(null);
+            renderGrid();
+            refocusIfLost();
+        });
+
+        boolean opensOnBoot = app.pkg.equals(prefs.getString(KEY_BOOT_APP, ""));
+        labels.add(opensOnBoot ? "Não abrir mais ao ligar" : "Abrir ao ligar o projetor");
+        actions.add(() -> {
+            prefs.edit().putString(KEY_BOOT_APP, opensOnBoot ? "" : app.pkg).apply();
+            Toast.makeText(this, opensOnBoot ? "Ok, não abre mais sozinho"
+                    : app.label + " vai abrir quando o projetor ligar", Toast.LENGTH_LONG).show();
+        });
+
         labels.add("Informações do app");
         actions.add(() -> startSafely(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:" + app.pkg))));
@@ -358,6 +440,105 @@ public class MainActivity extends Activity {
 
     private void saveFavorites() {
         prefs.edit().putString(KEY_FAVORITES, TextUtils.join(",", favorites)).apply();
+    }
+
+    // ---------- Apps ocultos ----------
+
+    private void showHiddenApps() {
+        List<AppInfo> list = new ArrayList<>();
+        for (AppInfo app : apps.values()) {
+            if (hidden.contains(app.pkg)) list.add(app);
+        }
+        String[] labels = new String[list.size()];
+        for (int i = 0; i < labels.length; i++) labels[i] = list.get(i).label;
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Escolha um app para mostrar de novo")
+                .setItems(labels, (dialog, which) -> {
+                    hidden.remove(list.get(which).pkg);
+                    saveHidden();
+                    renderGrid();
+                    refocusIfLost();
+                })
+                .show();
+    }
+
+    private void saveHidden() {
+        prefs.edit().putString(KEY_HIDDEN, TextUtils.join(",", hidden)).apply();
+    }
+
+    // ---------- Timer de dormir ----------
+
+    private void showSleepTimer() {
+        ControlService service = ControlService.instance;
+        if (service == null) {
+            showControlSetup();
+            return;
+        }
+        int[] minutes = {15, 30, 60, 90, 0};
+        String[] labels = {"15 minutos", "30 minutos", "1 hora", "1 hora e meia", "Cancelar timer"};
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Timer de dormir")
+                .setItems(labels, (dialog, which) -> {
+                    service.setSleepTimer(minutes[which]);
+                    Toast.makeText(this, minutes[which] == 0 ? "Timer cancelado"
+                            : "O projetor vai dormir em " + labels[which], Toast.LENGTH_LONG).show();
+                    updateStatus();
+                })
+                .show();
+    }
+
+    private void showControlSetup() {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Ative o HY Controle")
+                .setMessage("O timer de dormir e o controle pelo celular precisam do HY Controle.\n\n"
+                        + "Em Acessibilidade, abra \"HY Controle\" e ative. É só uma vez.")
+                .setPositiveButton("Abrir Acessibilidade",
+                        (dialog, which) -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                .setNegativeButton("Agora não", null)
+                .show();
+    }
+
+    // ---------- Papel de parede ----------
+
+    private void updateWallpaper() {
+        File file = Commands.wallpaperFile(this);
+        long stamp = file.exists() ? file.lastModified() : 0;
+        if (stamp == wallpaperStamp) return;
+        wallpaperStamp = stamp;
+
+        if (stamp == 0) {
+            showWallpaper(null);
+            return;
+        }
+        int width = getResources().getDisplayMetrics().widthPixels;
+        int height = getResources().getDisplayMetrics().heightPixels;
+        executor.execute(() -> {
+            Bitmap bitmap = decodeSampled(file.getPath(), width, height);
+            handler.post(() -> showWallpaper(bitmap));
+        });
+    }
+
+    private void showWallpaper(Bitmap bitmap) {
+        wallpaper.setImageBitmap(bitmap);
+        int visibility = bitmap != null ? View.VISIBLE : View.GONE;
+        wallpaper.setVisibility(visibility);
+        wallpaperDim.setVisibility(visibility);
+    }
+
+    /** Carrega a imagem já reduzida pro tamanho da tela, pra não gastar RAM. */
+    private static Bitmap decodeSampled(String path, int width, int height) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, options);
+        int sample = 1;
+        while (options.outWidth / (sample * 2) >= width && options.outHeight / (sample * 2) >= height) {
+            sample *= 2;
+        }
+        options.inJustDecodeBounds = false;
+        options.inSampleSize = sample;
+        options.inPreferredConfig = Bitmap.Config.RGB_565;
+        return BitmapFactory.decodeFile(path, options);
     }
 
     // ---------- Atalhos e status ----------
@@ -405,6 +586,17 @@ public class MainActivity extends Activity {
         networkStatus.setAlpha(caps == null ? 0.5f : 1f);
 
         memoryStatus.setText("RAM livre " + size(memoryInfo().availMem));
+
+        ControlService service = ControlService.instance;
+        long left = service != null ? service.getSleepAt() - System.currentTimeMillis() : 0;
+        if (left > 0) {
+            sleepStatus.setText("Dorme em " + ((left + 59_999) / 60_000) + " min");
+            sleepStatus.setVisibility(View.VISIBLE);
+        } else {
+            sleepStatus.setVisibility(View.GONE);
+        }
+
+        updateWallpaper();
     }
 
     // ---------- Memória e sistema ----------

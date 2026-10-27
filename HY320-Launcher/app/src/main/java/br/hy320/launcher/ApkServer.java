@@ -18,8 +18,8 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Servidor HTTP mínimo: serve a página de envio e recebe o APK direto
- * numa sessão do PackageInstaller (sem arquivo temporário).
+ * Servidor HTTP mínimo do "celular como controle": serve a página e recebe
+ * comandos, APKs (direto numa sessão do PackageInstaller) e papel de parede.
  */
 final class ApkServer extends Thread {
 
@@ -31,53 +31,119 @@ final class ApkServer extends Thread {
         void onError(String message);
     }
 
+    private static final int MAX_TEXT = 64 * 1024;
+
     private static final String PAGE = """
             <!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-            <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>HY Home - Enviar APK</title>
+            <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+            <title>HY Home</title>
             <style>
-            body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0c1222;color:#fff;font-family:system-ui,sans-serif}
-            .card{width:min(420px,calc(100% - 32px));background:#1a2033;border-radius:20px;padding:28px;box-sizing:border-box}
-            h1{margin:0 0 6px;font-size:22px}p{margin:0 0 20px;color:#a9b1c7}
-            label{display:block;border:2px dashed #3a4566;border-radius:14px;padding:28px 12px;text-align:center;cursor:pointer;color:#a9b1c7;word-break:break-all}
-            input{display:none}
-            button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:12px;background:#2b6cff;color:#fff;font-size:17px;font-weight:600}
-            button:disabled{opacity:.4}
-            .bar{height:8px;background:#0c1222;border-radius:4px;margin-top:18px;overflow:hidden}
-            .fill{height:100%;width:0;background:#6ea8ff;transition:width .2s}
-            #msg{margin-top:12px;min-height:20px;color:#a9b1c7}
-            </style></head><body><div class="card">
-            <h1>Enviar APK pro projetor</h1>
-            <p>Escolha um arquivo .apk. A instalação aparece na tela do projetor.</p>
-            <label for="file" id="pick">Toque para escolher o APK</label>
-            <input type="file" id="file" accept=".apk,application/vnd.android.package-archive">
-            <button id="send" disabled>Enviar</button>
+            *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+            body{margin:0;background:#0c1222;color:#fff;font-family:system-ui,sans-serif;padding:16px 16px 80px}
+            h1{font-size:20px;margin:4px 0 16px}
+            .card{background:#1a2033;border-radius:18px;padding:18px;margin-bottom:14px;max-width:480px;margin-left:auto;margin-right:auto}
+            h2{font-size:16px;margin:0 0 12px;color:#a9b1c7;font-weight:600}
+            button{border:0;border-radius:12px;background:#2a3557;color:#fff;font-size:16px;padding:14px 10px;font-weight:600;touch-action:manipulation}
+            button:active{background:#6ea8ff;color:#0c1222}
+            button.main{background:#2b6cff}
+            .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+            .pad button{height:64px;font-size:22px}
+            .row{display:flex;gap:8px;margin-top:8px}
+            .row button{flex:1}
+            input[type=text],input[type=url]{width:100%;padding:14px;border-radius:12px;border:1px solid #3a4566;background:#0c1222;color:#fff;font-size:17px}
+            input[type=file]{display:none}
+            label.pick{display:block;border:2px dashed #3a4566;border-radius:12px;padding:18px 10px;text-align:center;color:#a9b1c7;word-break:break-all}
+            .bar{height:6px;background:#0c1222;border-radius:3px;margin-top:10px;overflow:hidden}
+            .fill{height:100%;width:0;background:#6ea8ff}
+            #toast{position:fixed;left:16px;right:16px;bottom:16px;padding:14px;border-radius:12px;background:#2b6cff;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+            #toast.show{opacity:1}#toast.bad{background:#b3364a}
+            </style></head><body>
+            <h1>HY Home &middot; controle</h1>
+
+            <div class="card"><h2>Controle</h2>
+            <div class="pad">
+            <span></span><button data-k="up">&#9650;</button><span></span>
+            <button data-k="left">&#9664;</button><button class="main" data-k="ok">OK</button><button data-k="right">&#9654;</button>
+            <span></span><button data-k="down">&#9660;</button><span></span>
+            </div>
+            <div class="row"><button data-k="back">Voltar</button><button data-k="home">In&iacute;cio</button></div>
+            <div class="row"><button data-k="voldown">Vol &minus;</button><button data-k="mute">Mudo</button><button data-k="volup">Vol +</button></div>
+            </div>
+
+            <div class="card"><h2>Digitar no campo selecionado</h2>
+            <input type="text" id="txt" placeholder="Digite ou use o microfone do teclado" autocomplete="off">
+            <div class="row"><button class="main" id="enter">Enter</button><button id="clear">Limpar</button></div>
+            <div class="row"><button id="yt">Pesquisar no YouTube</button></div>
+            </div>
+
+            <div class="card"><h2>Abrir link no projetor</h2>
+            <input type="url" id="url" placeholder="Cole um link do YouTube ou site">
+            <div class="row"><button class="main" id="open">Abrir</button></div>
+            </div>
+
+            <div class="card"><h2>Timer de dormir</h2>
+            <div class="row"><button data-min="15">15</button><button data-min="30">30</button><button data-min="60">60</button><button data-min="90">90 min</button></div>
+            <div class="row"><button data-min="0">Cancelar timer</button></div>
+            </div>
+
+            <div class="card"><h2>Instalar APK</h2>
+            <label class="pick" for="apk" id="apkname">Escolher arquivo .apk</label>
+            <input type="file" id="apk" accept=".apk,application/vnd.android.package-archive">
+            <div class="row"><button class="main" id="apksend">Enviar e instalar</button></div>
             <div class="bar"><div class="fill" id="fill"></div></div>
-            <div id="msg"></div>
-            </div><script>
-            const file=document.getElementById('file'),send=document.getElementById('send'),
-              fill=document.getElementById('fill'),msg=document.getElementById('msg'),pick=document.getElementById('pick');
-            file.onchange=()=>{const f=file.files[0];pick.textContent=f?f.name:'Toque para escolher o APK';
-              send.disabled=!f;fill.style.width='0';msg.textContent='';};
-            send.onclick=()=>{const f=file.files[0];if(!f)return;send.disabled=true;msg.textContent='Enviando...';
+            </div>
+
+            <div class="card"><h2>Papel de parede</h2>
+            <label class="pick" for="wp" id="wpname">Escolher foto</label>
+            <input type="file" id="wp" accept="image/*">
+            <div class="row"><button class="main" id="wpsend">Usar como fundo</button><button id="wpreset">Remover</button></div>
+            </div>
+
+            <div id="toast"></div>
+            <script>
+            const $=id=>document.getElementById(id);
+            function toast(t,bad){const m=$('toast');m.textContent=t;m.className=bad?'show bad':'show';
+              clearTimeout(m.timer);m.timer=setTimeout(()=>{m.className='';},2500);}
+            async function post(url,body,okMsg){
+              try{const r=await fetch(url,{method:'POST',body:body});const t=await r.text();
+                if(r.ok){if(okMsg)toast(okMsg);}else toast(t,true);return r.ok;}
+              catch(e){toast('Sem conexão com o projetor',true);return false;}}
+            document.querySelectorAll('[data-k]').forEach(b=>{b.onclick=()=>post('/key?k='+b.dataset.k,'');});
+            let typing;
+            $('txt').oninput=()=>{clearTimeout(typing);typing=setTimeout(()=>post('/text',$('txt').value),400);};
+            $('enter').onclick=()=>post('/text?enter=1',$('txt').value,'Enviado');
+            $('clear').onclick=()=>{$('txt').value='';post('/text','');};
+            $('yt').onclick=()=>post('/youtube',$('txt').value,'Pesquisando no YouTube');
+            $('open').onclick=()=>post('/link',$('url').value,'Abrindo no projetor');
+            document.querySelectorAll('[data-min]').forEach(b=>{b.onclick=()=>post('/sleep?min='+b.dataset.min,'',
+              b.dataset.min=='0'?'Timer cancelado':'Projetor dorme em '+b.dataset.min+' min');});
+            $('apk').onchange=()=>{const f=$('apk').files[0];$('apkname').textContent=f?f.name:'Escolher arquivo .apk';$('fill').style.width='0';};
+            $('apksend').onclick=()=>{const f=$('apk').files[0];if(!f){toast('Escolha um APK',true);return;}
               const x=new XMLHttpRequest();x.open('POST','/upload?name='+encodeURIComponent(f.name));
-              x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded*100/e.total);
-                fill.style.width=p+'%';msg.textContent='Enviando... '+p+'%';}};
-              x.onload=()=>{msg.textContent=x.status==200?'Pronto! Confirme a instalação no projetor.':x.responseText;send.disabled=false;};
-              x.onerror=()=>{msg.textContent='Falhou. O projetor está na tela Receber APK?';send.disabled=false;};
-              x.send(f);};
+              x.upload.onprogress=e=>{if(e.lengthComputable)$('fill').style.width=Math.round(e.loaded*100/e.total)+'%';};
+              x.onload=()=>{if(x.status==200)toast('Pronto! Confirme a instalação no projetor');else toast(x.responseText,true);};
+              x.onerror=()=>toast('Falhou o envio',true);
+              x.send(f);toast('Enviando...');};
+            $('wp').onchange=()=>{const f=$('wp').files[0];$('wpname').textContent=f?f.name:'Escolher foto';};
+            $('wpsend').onclick=()=>{const f=$('wp').files[0];if(!f){toast('Escolha uma foto',true);return;}
+              toast('Enviando...');post('/wallpaper',f,'Papel de parede trocado');};
+            $('wpreset').onclick=()=>post('/wallpaper/reset','','Papel de parede removido');
             </script></body></html>
             """;
 
     private final Context context;
-    private final Listener listener;
     private final ServerSocket server;
+    private volatile Listener listener;
 
     ApkServer(Context context, Listener listener) throws IOException {
         super("ApkServer");
         this.context = context.getApplicationContext();
         this.listener = listener;
         this.server = openSocket();
+    }
+
+    void setListener(Listener listener) {
+        this.listener = listener;
     }
 
     int getPort() {
@@ -126,7 +192,7 @@ final class ApkServer extends Thread {
 
         String requestLine = readLine(in);
         if (requestLine == null) return;
-        long length = -1;
+        long length = 0;
         String line;
         while ((line = readLine(in)) != null && !line.isEmpty()) {
             int colon = line.indexOf(':');
@@ -138,24 +204,68 @@ final class ApkServer extends Thread {
         String[] parts = requestLine.split(" ");
         String method = parts[0];
         String path = parts.length > 1 ? parts[1] : "/";
+        int q = path.indexOf('?');
+        String route = q < 0 ? path : path.substring(0, q);
 
-        if (method.equals("GET") && (path.equals("/") || path.startsWith("/?"))) {
+        if (method.equals("GET") && route.equals("/")) {
             respond(out, 200, "text/html; charset=utf-8", PAGE);
-        } else if (method.equals("POST") && path.startsWith("/upload")) {
-            String name = queryParam(path, "name", "app.apk");
-            if (length <= 0) {
-                respond(out, 411, "text/plain; charset=utf-8", "Arquivo vazio");
-                return;
-            }
-            try {
-                install(in, length, name);
-                respond(out, 200, "text/plain; charset=utf-8", "ok");
-            } catch (IOException | RuntimeException e) {
-                listener.onError("Falha ao receber " + name);
-                respond(out, 500, "text/plain; charset=utf-8", "Falha: " + e.getMessage());
-            }
-        } else {
+            return;
+        }
+        if (!method.equals("POST")) {
             respond(out, 404, "text/plain; charset=utf-8", "Não encontrado");
+            return;
+        }
+
+        String error;
+        try {
+            switch (route) {
+                case "/upload":
+                    error = upload(in, length, queryParam(path, "name", "app.apk"));
+                    break;
+                case "/key":
+                    error = Commands.key(context, queryParam(path, "k", ""));
+                    break;
+                case "/text":
+                    error = Commands.text(readText(in, length), "1".equals(queryParam(path, "enter", "0")));
+                    break;
+                case "/youtube":
+                    error = Commands.searchYouTube(context, readText(in, length));
+                    break;
+                case "/link":
+                    error = Commands.openLink(context, readText(in, length));
+                    break;
+                case "/sleep":
+                    error = Commands.sleep(Integer.parseInt(queryParam(path, "min", "0")));
+                    break;
+                case "/wallpaper":
+                    error = Commands.saveWallpaper(context, in, length);
+                    break;
+                case "/wallpaper/reset":
+                    error = Commands.resetWallpaper(context);
+                    break;
+                default:
+                    respond(out, 404, "text/plain; charset=utf-8", "Não encontrado");
+                    return;
+            }
+        } catch (IOException | RuntimeException e) {
+            error = "Erro: " + e.getMessage();
+        }
+
+        if (error == null) {
+            respond(out, 200, "text/plain; charset=utf-8", "ok");
+        } else {
+            respond(out, 409, "text/plain; charset=utf-8", error);
+        }
+    }
+
+    private String upload(InputStream in, long length, String name) {
+        if (length <= 0) return "Arquivo vazio";
+        try {
+            install(in, length, name);
+            return null;
+        } catch (IOException | RuntimeException e) {
+            listener.onError("Falha ao receber " + name);
+            return "Falha: " + e.getMessage();
         }
     }
 
@@ -194,6 +304,18 @@ final class ApkServer extends Thread {
             installer.abandonSession(sessionId);
             throw e;
         }
+    }
+
+    private static String readText(InputStream in, long length) throws IOException {
+        if (length > MAX_TEXT) throw new IOException("Texto grande demais");
+        byte[] body = new byte[(int) length];
+        int read = 0;
+        while (read < length) {
+            int n = in.read(body, read, body.length - read);
+            if (n < 0) throw new IOException("Conexão interrompida");
+            read += n;
+        }
+        return new String(body, StandardCharsets.UTF_8);
     }
 
     private static String readLine(InputStream in) throws IOException {
