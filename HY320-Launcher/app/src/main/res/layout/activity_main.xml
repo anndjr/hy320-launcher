@@ -78,6 +78,8 @@
 
             <TextView
                 android:id="@+id/sleep_status"
+                android:focusable="true"
+                android:clickable="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="12dp"
@@ -96,6 +98,8 @@
 
             <TextView
                 android:id="@+id/memory_status"
+                android:focusable="true"
+                android:clickable="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="12dp"
@@ -113,6 +117,8 @@
 
             <TextView
                 android:id="@+id/network_status"
+                android:focusable="true"
+                android:clickable="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="6dp"
