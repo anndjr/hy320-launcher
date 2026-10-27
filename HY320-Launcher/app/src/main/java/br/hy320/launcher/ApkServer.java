@@ -47,13 +47,15 @@ final class ApkServer extends Thread {
             :root{--bg:#0b1020;--card:#161d31;--card2:#222c49;--line:#ffffff14;--muted:#9aa4bf;--accent:#5b8cff;--good:#7ee2a8;--bad:#ff8a9a}
             *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
             [hidden]{display:none!important}
-            body{margin:0;background:var(--bg);color:#fff;font-family:system-ui,Roboto,sans-serif;overscroll-behavior:none}
-            header{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:16px 20px 10px;background:var(--bg)}
+            html{height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+            body{height:100%;overflow:hidden;margin:0;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,Roboto,sans-serif;overscroll-behavior:none}
+            header{flex:none;display:flex;align-items:center;gap:10px;padding:16px 20px 10px;background:var(--bg)}
             header h1{font-size:19px;margin:0;flex:1;font-weight:700}
             #dot{width:10px;height:10px;border-radius:50%;background:#555}
             #dot.on{background:var(--good);box-shadow:0 0 10px var(--good)}#dot.off{background:var(--bad)}
             #stxt{font-size:13px;color:var(--muted)}
-            main{padding:4px 16px calc(100px + env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+            main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px calc(100px + env(safe-area-inset-bottom))}
+            main>section{max-width:480px;margin:0 auto}
             .tab{display:none}.tab.on{display:block}
             .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}
             h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:600}
@@ -190,7 +192,7 @@ final class ApkServer extends Thread {
             // Abas
             function tab(name){document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('on',s.id=='t-'+name));
               document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab==name));
-              store('tab',name);if(name=='apps')loadApps();if(name=='mais')loadState();window.scrollTo(0,0);}
+              store('tab',name);if(name=='apps')loadApps();if(name=='mais')loadState();document.querySelector('main').scrollTop=0;}
             document.querySelectorAll('[data-tab]').forEach(b=>{b.onclick=()=>{buzz();tab(b.dataset.tab);};});
 
             // Botões ou touchpad
@@ -205,6 +207,8 @@ final class ApkServer extends Thread {
             const lift=()=>{pad.classList.remove('touch');sx=null;};
             pad.addEventListener('pointerup',()=>{if(sx!==null&&!moved)key('ok');lift();});
             pad.addEventListener('pointercancel',lift);
+            // Arrastar no touchpad nunca rola a página.
+            pad.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 
             // Buscar
             let typing;
