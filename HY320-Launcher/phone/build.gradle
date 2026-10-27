@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+// App do celular: abre o controle do projetor em tela cheia. Mesma chave do HY Home.
+def keystoreFile = rootProject.file('keystore/launcher.p12')
+def keystorePassword = 'hy320launcher'
+def keystoreAlias = null
+if (keystoreFile.exists()) {
+    def ks = java.security.KeyStore.getInstance('PKCS12')
+    keystoreFile.withInputStream { ks.load(it, keystorePassword.toCharArray()) }
+    keystoreAlias = ks.aliases().nextElement()
+}
+
+def buildNumber = Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
+
+android {
+    namespace 'br.hy320.controle'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'br.hy320.controle'
+        minSdk 24
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile keystoreFile
+            storePassword keystorePassword
+            keyAlias keystoreAlias
+            keyPassword keystorePassword
+            storeType 'pkcs12'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
