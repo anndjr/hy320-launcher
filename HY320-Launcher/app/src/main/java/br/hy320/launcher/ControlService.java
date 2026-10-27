@@ -246,6 +246,65 @@ public class ControlService extends AccessibilityService {
         return null;
     }
 
+    /**
+     * Pesquisa no app que está aberto: usa o campo de texto que estiver na tela;
+     * se não tiver, toca no botão de busca do app e espera o campo aparecer.
+     */
+    String searchInApp(String query) {
+        if (query.trim().isEmpty()) return "Digite o que quer procurar";
+        AccessibilityNodeInfo field = findEditable();
+        if (field == null) {
+            AccessibilityNodeInfo button = findSearchButton(getRootInActiveWindow());
+            if (button == null) return "Não achei a busca desse app. Abra a tela de busca dele e tente de novo";
+            while (button != null && !button.isClickable()) button = button.getParent();
+            if (button == null || !button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                return "Não consegui abrir a busca desse app";
+            }
+            for (int i = 0; i < 10 && field == null; i++) {
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException e) {
+                    return "Interrompido";
+                }
+                field = findEditable();
+            }
+            if (field == null) return "Abri a busca, mas o app não tem campo de texto que aceite digitação";
+        }
+        field.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+        Bundle args = new Bundle();
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query.trim());
+        if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return "Esse campo não aceitou o texto";
+        if (Build.VERSION.SDK_INT >= 30) {
+            field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());
+        }
+        return null;
+    }
+
+    private AccessibilityNodeInfo findEditable() {
+        AccessibilityNodeInfo focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focused != null && focused.isEditable()) return focused;
+        return firstMatch(getRootInActiveWindow(), n -> n.isEditable() && n.isVisibleToUser());
+    }
+
+    private static AccessibilityNodeInfo findSearchButton(AccessibilityNodeInfo root) {
+        return firstMatch(root, n -> {
+            if (!n.isVisibleToUser()) return false;
+            String text = (n.getContentDescription() + " " + n.getText() + " " + n.getViewIdResourceName()).toLowerCase();
+            return text.contains("search") || text.contains("pesquis") || text.contains("busca") || text.contains("procurar");
+        });
+    }
+
+    private static AccessibilityNodeInfo firstMatch(AccessibilityNodeInfo node,
+                                                    java.util.function.Predicate<AccessibilityNodeInfo> test) {
+        if (node == null) return null;
+        if (test.test(node)) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo found = firstMatch(node.getChild(i), test);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     // ---------- Timer de dormir ----------
 
     void setSleepTimer(int minutes) {

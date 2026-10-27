@@ -57,24 +57,43 @@ final class Commands {
         return service == null ? needControl(context) : service.setText(text, enter);
     }
 
+    static String searchInApp(Context context, String query) {
+        ControlService service = ControlService.instance;
+        return service == null ? needControl(context) : service.searchInApp(query);
+    }
+
     static String openLink(Context context, String url) {
         url = url.trim();
         if (url.isEmpty()) return "Cole um link primeiro";
         if (!url.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) url = "https://" + url;
-        return start(context, new Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        Uri uri = Uri.parse(url);
+        // Links do YouTube vão direto pro SmartTube, sem perguntar qual app usar.
+        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
+        if (host.endsWith("youtube.com") || host.equals("youtu.be")) {
+            for (String pkg : SMARTTUBE) {
+                if (start(context, new Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return null;
+            }
+        }
+        return start(context, new Intent(Intent.ACTION_VIEW, uri))
                 ? null : "Nenhum app do projetor abre esse link";
     }
+
+    /** SmartTube estável e beta: YouTube sem anúncios, preferido no lugar do oficial. */
+    static final String[] SMARTTUBE = {"com.teamsmart.videomanager.tv", "com.liskovsoft.smarttubetv.beta"};
 
     static String searchYouTube(Context context, String query) {
         query = query.trim();
         if (query.isEmpty()) return "Digite o que quer procurar";
+        Uri web = Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query));
+        for (String pkg : SMARTTUBE) {
+            if (start(context, new Intent(Intent.ACTION_VIEW, web).setPackage(pkg))) return null;
+        }
         for (String pkg : new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}) {
             Intent search = new Intent(Intent.ACTION_SEARCH)
                     .setPackage(pkg)
                     .putExtra(SearchManager.QUERY, query);
             if (start(context, search)) return null;
         }
-        Uri web = Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query));
         return start(context, new Intent(Intent.ACTION_VIEW, web)) ? null : "YouTube não encontrado";
     }
 

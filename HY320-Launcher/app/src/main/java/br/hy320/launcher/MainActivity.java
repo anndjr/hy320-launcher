@@ -65,6 +65,8 @@ public class MainActivity extends Activity {
 
     // Usados só na primeira abertura, se estiverem instalados.
     private static final String[] DEFAULT_FAVORITES = {
+            "com.teamsmart.videomanager.tv",
+            "com.liskovsoft.smarttubetv.beta",
             "com.google.android.youtube.tv",
             "com.google.android.youtube",
             "com.netflix.ninja",

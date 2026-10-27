@@ -77,7 +77,7 @@ final class ApkServer extends Thread {
             <div class="card"><h2>Digitar no campo selecionado</h2>
             <input type="text" id="txt" placeholder="Digite ou use o microfone do teclado" autocomplete="off">
             <div class="row"><button class="main" id="enter">Enter</button><button id="clear">Limpar</button></div>
-            <div class="row"><button id="yt">Pesquisar no YouTube</button></div>
+            <div class="row"><button id="yt">Pesquisar no YouTube</button><button id="appsearch">Pesquisar no app aberto</button></div>
             </div>
 
             <div class="card"><h2>Abrir link no projetor</h2>
@@ -118,6 +118,7 @@ final class ApkServer extends Thread {
             $('enter').onclick=()=>post('/text?enter=1',$('txt').value,'Enviado');
             $('clear').onclick=()=>{$('txt').value='';post('/text','');};
             $('yt').onclick=()=>post('/youtube',$('txt').value,'Pesquisando no YouTube');
+            $('appsearch').onclick=()=>post('/appsearch',$('txt').value,'Pesquisando no app aberto');
             $('open').onclick=()=>post('/link',$('url').value,'Abrindo no projetor');
             document.querySelectorAll('[data-min]').forEach(b=>{b.onclick=()=>post('/sleep?min='+b.dataset.min,'',
               b.dataset.min=='0'?'Timer cancelado':'Projetor dorme em '+b.dataset.min+' min');});
@@ -280,6 +281,9 @@ final class ApkServer extends Thread {
                     break;
                 case "/youtube":
                     error = Commands.searchYouTube(context, readText(in, length));
+                    break;
+                case "/appsearch":
+                    error = Commands.searchInApp(context, readText(in, length));
                     break;
                 case "/link":
                     error = Commands.openLink(context, readText(in, length));
