@@ -1,6 +1,7 @@
 package br.hy320.launcher;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
@@ -10,13 +11,20 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.StatFs;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.text.format.Formatter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
@@ -25,6 +33,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.net.Inet4Address;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -87,6 +96,7 @@ public class MainActivity extends Activity {
     private LinearLayout appsGrid;
     private TextView greeting;
     private TextView networkStatus;
+    private TextView memoryStatus;
     private LayoutInflater inflater;
     private SharedPreferences prefs;
 
@@ -111,16 +121,19 @@ public class MainActivity extends Activity {
         appsGrid = findViewById(R.id.apps_grid);
         greeting = findViewById(R.id.greeting);
         networkStatus = findViewById(R.id.network_status);
+        memoryStatus = findViewById(R.id.memory_status);
 
         String saved = prefs.getString(KEY_FAVORITES, "");
         for (String pkg : saved.split(",")) {
             if (!pkg.isEmpty()) favorites.add(pkg);
         }
 
-        addShortcut(R.drawable.ic_wifi, "Wi-Fi", Settings.ACTION_WIFI_SETTINGS);
-        addShortcut(R.drawable.ic_bluetooth, "Bluetooth", Settings.ACTION_BLUETOOTH_SETTINGS);
-        addShortcut(R.drawable.ic_volume, "Som", Settings.ACTION_SOUND_SETTINGS);
-        addShortcut(R.drawable.ic_settings, "Configurações", Settings.ACTION_SETTINGS);
+        addShortcut(R.drawable.ic_flash, "Limpar memória", this::cleanMemory);
+        addShortcut(R.drawable.ic_wifi, "Wi-Fi", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
+        addShortcut(R.drawable.ic_bluetooth, "Bluetooth", () -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS));
+        addShortcut(R.drawable.ic_volume, "Som", () -> openSettings(Settings.ACTION_SOUND_SETTINGS));
+        addShortcut(R.drawable.ic_info, "Sistema", this::showSystemInfo);
+        addShortcut(R.drawable.ic_settings, "Configurações", () -> openSettings(Settings.ACTION_SETTINGS));
         shortcutsRow.getChildAt(0).requestFocus();
     }
 
@@ -346,15 +359,17 @@ public class MainActivity extends Activity {
 
     // ---------- Atalhos e status ----------
 
-    private void addShortcut(int iconRes, String label, String action) {
+    private void addShortcut(int iconRes, String label, Runnable onClick) {
         View item = inflater.inflate(R.layout.item_shortcut, shortcutsRow, false);
         ((ImageView) item.findViewById(R.id.icon)).setImageResource(iconRes);
         ((TextView) item.findViewById(R.id.label)).setText(label);
         item.setOnFocusChangeListener(FOCUS_ZOOM);
-        item.setOnClickListener(v -> {
-            if (!startSafely(new Intent(action))) startSafely(new Intent(Settings.ACTION_SETTINGS));
-        });
+        item.setOnClickListener(v -> onClick.run());
         shortcutsRow.addView(item);
+    }
+
+    private void openSettings(String action) {
+        if (!startSafely(new Intent(action))) startSafely(new Intent(Settings.ACTION_SETTINGS));
     }
 
     private boolean startSafely(Intent intent) {
@@ -385,5 +400,83 @@ public class MainActivity extends Activity {
         }
         networkStatus.setText(text);
         networkStatus.setAlpha(caps == null ? 0.5f : 1f);
+
+        memoryStatus.setText("RAM livre " + size(memoryInfo().availMem));
+    }
+
+    // ---------- Memória e sistema ----------
+
+    private void cleanMemory() {
+        Toast.makeText(this, "Limpando memória…", Toast.LENGTH_SHORT).show();
+        List<String> packages = new ArrayList<>(apps.keySet());
+        executor.execute(() -> {
+            ActivityManager am = getSystemService(ActivityManager.class);
+            long before = memoryInfo().availMem;
+            for (String pkg : packages) am.killBackgroundProcesses(pkg);
+            SystemClock.sleep(800); // dá tempo do sistema recolher a memória
+            long freed = memoryInfo().availMem - before;
+            handler.post(() -> {
+                String msg = freed > 1024 * 1024
+                        ? "Memória liberada: " + size(freed)
+                        : "A memória já estava limpa";
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                updateStatus();
+            });
+        });
+    }
+
+    private void showSystemInfo() {
+        ActivityManager.MemoryInfo mem = memoryInfo();
+        StatFs disk = new StatFs(Environment.getDataDirectory().getPath());
+        String info = "Modelo: " + Build.MANUFACTURER + " " + Build.MODEL
+                + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
+                + "\n\nRAM livre: " + size(mem.availMem) + " de " + size(mem.totalMem)
+                + "\nArmazenamento livre: " + size(disk.getAvailableBytes()) + " de " + size(disk.getTotalBytes())
+                + "\n\nIP: " + ipAddress()
+                + "\nLigado há: " + uptime()
+                + "\n\nHY Home " + versionName();
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Sistema")
+                .setMessage(info)
+                .setPositiveButton("Limpar memória", (dialog, which) -> cleanMemory())
+                .setNegativeButton("Fechar", null)
+                .show();
+    }
+
+    private ActivityManager.MemoryInfo memoryInfo() {
+        ActivityManager.MemoryInfo mem = new ActivityManager.MemoryInfo();
+        getSystemService(ActivityManager.class).getMemoryInfo(mem);
+        return mem;
+    }
+
+    private String size(long bytes) {
+        return Formatter.formatShortFileSize(this, bytes);
+    }
+
+    private String ipAddress() {
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        LinkProperties link = cm == null ? null : cm.getLinkProperties(cm.getActiveNetwork());
+        if (link != null) {
+            for (LinkAddress address : link.getLinkAddresses()) {
+                if (address.getAddress() instanceof Inet4Address) {
+                    return address.getAddress().getHostAddress();
+                }
+            }
+        }
+        return "sem conexão";
+    }
+
+    private String uptime() {
+        long minutes = SystemClock.elapsedRealtime() / 60000;
+        return minutes >= 60 ? (minutes / 60) + " h " + (minutes % 60) + " min" : minutes + " min";
+    }
+
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return "";
+        }
     }
 }
