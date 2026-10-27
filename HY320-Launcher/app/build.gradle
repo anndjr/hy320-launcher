@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Chave fixa: assim cada APK novo instala por cima do anterior sem desinstalar.
+def keystoreFile = rootProject.file('keystore/launcher.p12')
+def keystorePassword = 'hy320launcher'
+def keystoreAlias = null
+if (keystoreFile.exists()) {
+    def ks = java.security.KeyStore.getInstance('PKCS12')
+    keystoreFile.withInputStream { ks.load(it, keystorePassword.toCharArray()) }
+    keystoreAlias = ks.aliases().nextElement()
+}
+
+def buildNumber = Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
+
+android {
+    namespace 'br.hy320.launcher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'br.hy320.launcher'
+        minSdk 24
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile keystoreFile
+            storePassword keystorePassword
+            keyAlias keystoreAlias
+            keyPassword keystorePassword
+            storeType 'pkcs12'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
