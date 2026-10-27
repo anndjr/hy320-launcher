@@ -82,11 +82,11 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/control_state"
                 style="@style/Text.Secondary"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="Pra controlar, digitar e usar o timer: ative o HY Controle em Acessibilidade (só uma vez)"
                 android:textSize="15sp" />
 
             <TextView
