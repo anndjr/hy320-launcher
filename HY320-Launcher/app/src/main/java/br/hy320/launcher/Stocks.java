@@ -76,8 +76,10 @@ final class Stocks {
     }
 
     private static double[] points(JSONObject result) {
-        JSONArray close = result.optJSONObject("indicators") == null ? null
-                : result.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("close");
+        JSONObject indicators = result.optJSONObject("indicators");
+        JSONArray quote = indicators == null ? null : indicators.optJSONArray("quote");
+        JSONObject first = quote == null ? null : quote.optJSONObject(0);
+        JSONArray close = first == null ? null : first.optJSONArray("close");
         if (close == null) return new double[0];
         List<Double> values = new ArrayList<>();
         for (int i = 0; i < close.length(); i++) {
