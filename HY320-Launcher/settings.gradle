@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = 'HY320Launcher'
 include ':app'
+include ':phone'
