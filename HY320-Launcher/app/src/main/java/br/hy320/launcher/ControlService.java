@@ -1,6 +1,7 @@
 package br.hy320.launcher;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -11,6 +12,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import java.io.IOException;
@@ -103,6 +105,23 @@ public class ControlService extends AccessibilityService {
             }
         }
         if (lastProblem != null) text.append("\nProblema: ").append(lastProblem);
+        if (instance == null) {
+            // Detalhes crus pra descobrir onde o firmware trava.
+            String raw = Settings.Secure.getString(context.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            int on = Settings.Secure.getInt(context.getContentResolver(),
+                    Settings.Secure.ACCESSIBILITY_ENABLED, -1);
+            boolean listed = false;
+            AccessibilityManager manager = context.getSystemService(AccessibilityManager.class);
+            if (manager != null) {
+                for (AccessibilityServiceInfo info : manager.getInstalledAccessibilityServiceList()) {
+                    if (context.getPackageName().equals(info.getResolveInfo().serviceInfo.packageName)) listed = true;
+                }
+            }
+            text.append("\n[diag] sistema reconhece o serviço: ").append(listed ? "sim" : "NÃO")
+                    .append(" · acessibilidade geral: ").append(on)
+                    .append(" · ativos: ").append(raw == null || raw.isEmpty() ? "(nenhum)" : raw);
+        }
         text.append("\nAndroid ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")");
         return text.toString();
     }
