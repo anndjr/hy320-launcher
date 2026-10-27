@@ -5,6 +5,7 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -129,6 +130,8 @@ public class MainActivity extends Activity {
         }
 
         addShortcut(R.drawable.ic_flash, "Limpar memória", this::cleanMemory);
+        addShortcut(R.drawable.ic_download, "Receber APK",
+                () -> startSafely(new Intent(this, ReceiveActivity.class)));
         addShortcut(R.drawable.ic_wifi, "Wi-Fi", () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
         addShortcut(R.drawable.ic_bluetooth, "Bluetooth", () -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS));
         addShortcut(R.drawable.ic_volume, "Som", () -> openSettings(Settings.ACTION_SOUND_SETTINGS));
@@ -428,11 +431,12 @@ public class MainActivity extends Activity {
     private void showSystemInfo() {
         ActivityManager.MemoryInfo mem = memoryInfo();
         StatFs disk = new StatFs(Environment.getDataDirectory().getPath());
+        String ip = ipAddress(this);
         String info = "Modelo: " + Build.MANUFACTURER + " " + Build.MODEL
                 + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
                 + "\n\nRAM livre: " + size(mem.availMem) + " de " + size(mem.totalMem)
                 + "\nArmazenamento livre: " + size(disk.getAvailableBytes()) + " de " + size(disk.getTotalBytes())
-                + "\n\nIP: " + ipAddress()
+                + "\n\nIP: " + (ip != null ? ip : "sem conexão")
                 + "\nLigado há: " + uptime()
                 + "\n\nHY Home " + versionName();
 
@@ -454,8 +458,9 @@ public class MainActivity extends Activity {
         return Formatter.formatShortFileSize(this, bytes);
     }
 
-    private String ipAddress() {
-        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+    /** IPv4 do projetor na rede local, ou null sem conexão. */
+    static String ipAddress(Context context) {
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
         LinkProperties link = cm == null ? null : cm.getLinkProperties(cm.getActiveNetwork());
         if (link != null) {
             for (LinkAddress address : link.getLinkAddresses()) {
@@ -464,7 +469,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        return "sem conexão";
+        return null;
     }
 
     private String uptime() {
