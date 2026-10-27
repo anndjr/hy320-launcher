@@ -276,6 +276,27 @@ public class ControlService extends AccessibilityService {
     }
 
     private void clickPowerOff() {
+        boolean found = false, clicked = false;
+        for (AccessibilityNodeInfo node : findPowerOff()) {
+            found = true;
+            while (node != null && !node.isClickable()) node = node.getParent();
+            if (node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                clicked = true;
+                break;
+            }
+        }
+        lastProblem = "timer: menu " + (found ? "achado" : "não achado") + (clicked ? ", clicado" : "");
+        // "Desligar" já vem selecionado no menu: se o clique não resolveu, aperta OK.
+        boolean seen = found;
+        handler.postDelayed(() -> {
+            if (!seen || !findPowerOff().isEmpty()) {
+                KeyInjector.press(KeyInjector.code("ok"));
+                lastProblem += ", OK apertado";
+            }
+        }, 1500);
+    }
+
+    private java.util.List<AccessibilityNodeInfo> findPowerOff() {
         java.util.List<AccessibilityNodeInfo> roots = new java.util.ArrayList<>();
         for (AccessibilityWindowInfo window : getWindows()) {
             AccessibilityNodeInfo root = window.getRoot();
@@ -283,13 +304,12 @@ public class ControlService extends AccessibilityService {
         }
         AccessibilityNodeInfo active = getRootInActiveWindow();
         if (active != null) roots.add(active);
+        java.util.List<AccessibilityNodeInfo> nodes = new java.util.ArrayList<>();
         for (AccessibilityNodeInfo root : roots) {
             for (String label : new String[]{"Desligar", "Power off", "Shut down"}) {
-                for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(label)) {
-                    while (node != null && !node.isClickable()) node = node.getParent();
-                    if (node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return;
-                }
+                nodes.addAll(root.findAccessibilityNodeInfosByText(label));
             }
         }
+        return nodes;
     }
 }
